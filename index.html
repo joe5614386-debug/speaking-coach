@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>每日口說教練</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Noto+Sans+TC:wght@400;500;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a practice console. Top bar = accent + voice controls; main = sentence script you read line by line; side = today's score and words to review. */
+:root{
+  --bg:#F2F5F4; --surface:#FFFFFF; --sunk:#E8EEEC; --ink:#16201E; --muted:#5B6A66; --line:#D6DFDB;
+  --accent:#1D6B58; --accent-ink:#FFFFFF; --rec:#C2410C;
+  --good:#2F7D4F; --good-bg:#E3F2E8; --warn:#9A6411; --warn-bg:#FBF0DA; --bad:#B42318; --bad-bg:#FBE6E3;
+  --f-display:"Bricolage Grotesque", "Noto Sans TC", system-ui, sans-serif;
+  --f-body:"Noto Sans TC", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --f-read:"Source Serif 4", Georgia, "Times New Roman", serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1412; --surface:#161F1C; --sunk:#1D2825; --ink:#E5ECE9; --muted:#93A39E; --line:#2A3632;
+  --accent:#5CC3A6; --accent-ink:#0B1714; --rec:#F2804A;
+  --good:#6FD39A; --good-bg:#183326; --warn:#F0BE62; --warn-bg:#3A2D12; --bad:#F2877B; --bad-bg:#3D1D19;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1412; --surface:#161F1C; --sunk:#1D2825; --ink:#E5ECE9; --muted:#93A39E; --line:#2A3632;
+  --accent:#5CC3A6; --accent-ink:#0B1714; --rec:#F2804A;
+  --good:#6FD39A; --good-bg:#183326; --warn:#F0BE62; --warn-bg:#3A2D12; --bad:#F2877B; --bad-bg:#3D1D19;
+  color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);padding:0 16px}
+.wrap{max-width:1120px;margin:0 auto;padding-block:20px 48px;display:grid;gap:18px}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-family:var(--f-display);font-weight:700;font-size:clamp(26px,4vw,36px);line-height:1.1;margin:0;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:4px 0 0;font-size:14px}
+.datebox{display:flex;align-items:center;gap:8px}
+.datebox input{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-family:var(--f-mono);font-size:13px}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.label{font-size:12px;letter-spacing:.06em;color:var(--muted);font-weight:500;margin:0 0 8px}
+
+.controls{display:grid;gap:14px}
+.accents{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--sunk);border-radius:999px;padding:5px 12px;font-size:13px;display:inline-flex;gap:6px;align-items:center}
+.chip small{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.chip[aria-pressed="true"] small{color:inherit;opacity:.8}
+.chip:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.row > *{min-width:0}
+select{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;max-width:100%}
+.rate{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.rate output{font-family:var(--f-mono);color:var(--ink);min-width:3.2em}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;display:inline-flex;align-items:center;gap:8px;font-weight:500}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.rec{background:var(--rec);color:#fff;border-color:var(--rec)}
+.btn svg{width:16px;height:16px;flex:none}
+.spacer{flex:1}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+.account input{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-width:0;flex:1 1 170px;max-width:260px}
+.authmsg{font-size:13px;color:var(--muted)}
+.authmsg.err{color:var(--bad)}
+.dot.on{background:var(--good)}
+#micBtn.on{border-color:var(--good);color:var(--good);background:var(--good-bg)}
+#micBtn.on .dot{background:var(--good)}
+#micBtn.blocked{border-color:var(--bad);color:var(--bad);background:var(--bad-bg)}
+#micBtn.blocked .dot{background:var(--bad)}
+
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+@media (max-width:860px){.layout{grid-template-columns:1fr}}
+
+.script-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}
+.tag{font-size:12px;background:var(--warn-bg);color:var(--warn);border-radius:6px;padding:2px 8px}
+textarea{width:100%;min-height:180px;resize:vertical;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:12px;font-family:var(--f-read);font-size:16px;line-height:1.6}
+
+ol.sents{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.sent{display:grid;grid-template-columns:2.2em minmax(0,1fr) auto;gap:10px;padding:12px 8px;border-radius:10px;border:1px solid transparent}
+.sent.active{background:var(--sunk);border-color:var(--line)}
+.num{font-family:var(--f-mono);font-size:12px;color:var(--muted);padding-top:5px;font-variant-numeric:tabular-nums}
+.text{font-family:var(--f-read);font-size:19px;line-height:1.55;min-width:0}
+.w{cursor:pointer;border-radius:4px;padding:0 1px;transition:background .15s}
+.w:hover{background:var(--sunk);text-decoration:underline dotted}
+.w.ok,.w.live-ok{color:var(--good);background:var(--good-bg);box-shadow:inset 0 -2px 0 var(--good);font-weight:600}
+.w.live-ok{transition:background .2s,color .2s}
+.w.miss{color:var(--bad);background:var(--bad-bg);text-decoration:underline wavy var(--bad) 1px;text-underline-offset:4px}
+.acts{display:flex;gap:6px;align-items:flex-start}
+.ibtn{width:36px;height:36px;border-radius:999px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center}
+.ibtn svg{width:16px;height:16px}
+.ibtn.listening{background:var(--rec);border-color:var(--rec);color:#fff;animation:pulse 1.1s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--rec) 25%,transparent)}}
+@media (prefers-reduced-motion:reduce){.ibtn.listening{animation:none}}
+.result{grid-column:2 / 4;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:baseline;font-size:13px;color:var(--muted)}
+.result:empty{display:none}
+.score{font-family:var(--f-mono);font-weight:600;font-size:13px;border-radius:6px;padding:1px 8px;font-variant-numeric:tabular-nums}
+.score.good{background:var(--good-bg);color:var(--good)}
+.score.fair{background:var(--warn-bg);color:var(--warn)}
+.score.low{background:var(--bad-bg);color:var(--bad)}
+.heard{font-family:var(--f-read);font-style:italic;color:var(--ink);overflow-wrap:anywhere}
+.live{font-style:italic;color:var(--muted)}
+
+aside{display:grid;gap:18px}
+.big{font-family:var(--f-display);font-weight:700;font-size:44px;line-height:1;font-variant-numeric:tabular-nums}
+.big small{font-size:16px;color:var(--muted);font-weight:500}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stat .v{font-family:var(--f-mono);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.stat .k{font-size:12px;color:var(--muted)}
+.review{display:flex;flex-wrap:wrap;gap:6px}
+.review button{border:1px solid var(--line);background:var(--bad-bg);color:var(--bad);border-radius:6px;padding:2px 8px;font-family:var(--f-read);font-size:15px}
+.empty{color:var(--muted);font-size:13px;margin:0}
+.bars{display:grid;grid-template-columns:repeat(14,1fr);gap:4px;align-items:end;height:90px}
+.bar{background:var(--accent);border-radius:3px 3px 0 0;min-height:2px;opacity:.85}
+.bar.none{background:var(--line);opacity:1}
+.bar-x{display:grid;grid-template-columns:repeat(14,1fr);gap:4px;font-family:var(--f-mono);font-size:9px;color:var(--muted);text-align:center;margin-top:4px}
+.notice{border:1px solid var(--line);background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:10px 14px;font-size:14px}
+.foot{font-size:12.5px;color:var(--muted);line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>每日口說教練</h1>
+      <p class="sub">聽各國口音示範，逐句跟讀，系統即時比對你說的每個字</p>
+    </div>
+    <div class="datebox">
+      <label for="date" class="label" style="margin:0">練習日期</label>
+      <input type="date" id="date">
+    </div>
+  </header>
+
+  <div id="srNotice" class="notice" hidden></div>
+
+  <section class="panel account" aria-label="雲端同步">
+    <form id="authForm" class="row">
+      <p class="label" style="margin:0">雲端同步</p>
+      <input type="email" id="authEmail" placeholder="Email" autocomplete="email" required>
+      <input type="password" id="authPass" placeholder="密碼（至少 6 碼）" autocomplete="current-password" minlength="6" required>
+      <button class="btn primary" type="submit" id="loginBtn">登入</button>
+      <button class="btn" type="button" id="signupBtn">註冊新帳號</button>
+      <span class="authmsg" id="authMsg">未登入時，紀錄只存在這個瀏覽器。</span>
+    </form>
+    <div id="authOn" class="row" hidden>
+      <span class="dot on"></span>
+      <span>已同步到雲端：<strong id="authWho"></strong></span>
+      <span class="authmsg" id="syncMsg"></span>
+      <span class="spacer"></span>
+      <button class="btn" type="button" id="logoutBtn">登出</button>
+    </div>
+  </section>
+
+  <section class="panel controls" aria-label="發音設定">
+    <div>
+      <p class="label">示範口音</p>
+      <div class="accents" id="accents"></div>
+    </div>
+    <div class="row">
+      <select id="voice" aria-label="語音"></select>
+      <div class="rate">
+        <label for="rate">語速</label>
+        <input type="range" id="rate" min="0.5" max="1.3" step="0.05">
+        <output id="rateOut"></output>
+      </div>
+      <span class="spacer"></span>
+      <button class="btn" id="micBtn" aria-live="polite"><span class="dot" id="micDot"></span><span id="micLabel">開啟麥克風</span></button>
+      <button class="btn" id="playAll"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg>全部朗讀</button>
+      <button class="btn primary" id="shadowAll"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5.5" y="1.5" width="5" height="8.5" rx="2.5"/><path d="M3 7.5a5 5 0 0 0 10 0M8 12.5V15"/></svg>自動跟讀練習</button>
+      <button class="btn" id="stop" hidden>停止</button>
+    </div>
+  </section>
+
+  <div class="layout">
+    <section class="panel" aria-label="今日材料">
+      <div class="script-head">
+        <div class="row" style="gap:8px">
+          <p class="label" style="margin:0">今日材料</p>
+          <span class="tag" id="sampleTag" hidden>範例內容，按「編輯」貼上你的資料</span>
+        </div>
+        <button class="btn" id="editBtn">編輯</button>
+      </div>
+      <div id="editor" hidden>
+        <textarea id="src" placeholder="把今天的英文口說資料貼在這裡，一段或多段都可以。"></textarea>
+        <div class="row" style="margin-top:10px">
+          <button class="btn primary" id="saveBtn">儲存並開始練習</button>
+          <button class="btn" id="cancelBtn">取消</button>
+        </div>
+      </div>
+      <ol class="sents" id="sents"></ol>
+    </section>
+
+    <aside>
+      <section class="panel">
+        <p class="label">今日平均分數</p>
+        <div class="big" id="avg">–</div>
+        <div class="stats" style="margin-top:14px">
+          <div class="stat"><div class="v" id="done">0/0</div><div class="k">已練句數</div></div>
+          <div class="stat"><div class="v" id="tries">0</div><div class="k">跟讀次數</div></div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="label">待加強單字（點擊聽慢速發音）</p>
+        <div class="review" id="review"></div>
+      </section>
+      <section class="panel">
+        <p class="label">近 14 天平均分數</p>
+        <div class="bars" id="bars"></div>
+        <div class="bar-x" id="barx"></div>
+      </section>
+      <p class="foot">評分方式：用瀏覽器語音辨識聽你說的話，再逐字對照原文。綠色是辨識正確的字，紅色波浪線是沒被辨識出或唸錯的字。它評的是「母語者聽不聽得懂」，不是音素級的分析；同一句換不同口音的辨識器（上方切換）也可以練。</p>
+    </aside>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+(function(){
+const SUPABASE_URL = 'https://bcpmydedgwkiyzuelrvg.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_XsISnKhZKuYOWpgfufRUgw_u0oyepvM';
+const $ = s => document.querySelector(s);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
+  keys(){ try{ return Object.keys(localStorage); }catch(e){ return []; } }
+};
+const ACCENTS = [
+  {code:'en-US', name:'美式'}, {code:'en-GB', name:'英式'}, {code:'en-AU', name:'澳洲'},
+  {code:'en-CA', name:'加拿大'}, {code:'en-IE', name:'愛爾蘭'}, {code:'en-IN', name:'印度'},
+  {code:'en-NZ', name:'紐西蘭'}, {code:'en-ZA', name:'南非'}, {code:'en-SG', name:'新加坡'}
+];
+const SAMPLE = "Good morning. Today I want to talk about my plans for the weekend. On Saturday, I will visit my grandparents in the countryside. The weather should be clear and comfortable. Could you recommend a quiet place to have lunch nearby? I usually practice English for twenty minutes every morning.";
+
+const ICON_PLAY = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg>';
+const ICON_MIC = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5.5" y="1.5" width="5" height="8.5" rx="2.5"/><path d="M3 7.5a5 5 0 0 0 10 0M8 12.5V15"/></svg>';
+
+function todayStr(){ const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); }
+
+const S = {
+  date: todayStr(),
+  accent: store.get('accent', 'en-US'),
+  voiceURI: store.get('voice', ''),
+  rate: store.get('rate', 0.95),
+  text: '', sample: false, sentences: [], results: {}, tries: 0,
+  active: -1, running: false, rec: null
+};
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SR){
+  const n = $('#srNotice'); n.hidden = false;
+  n.textContent = '這個瀏覽器不支援語音辨識，只能聽示範。請改用 Chrome 或 Microsoft Edge 開啟這個檔案，才能糾正發音。';
+}
+
+/* ---------- text processing ---------- */
+function splitSentences(t){
+  const m = t.replace(/\s+/g,' ').trim().match(/[^.!?]+[.!?]+["'”’)]*|[^.!?]+$/g);
+  return (m || []).map(s => s.trim()).filter(s => /[a-z0-9]/i.test(s));
+}
+const NUM = {'0':'zero','1':'one','2':'two','3':'three','4':'four','5':'five','6':'six','7':'seven','8':'eight','9':'nine','10':'ten','11':'eleven','12':'twelve','15':'fifteen','20':'twenty','30':'thirty','100':'hundred'};
+const CONTR = {"i'm":"i am","you're":"you are","we're":"we are","they're":"they are","it's":"it is","that's":"that is","there's":"there is","what's":"what is","he's":"he is","she's":"she is","i've":"i have","you've":"you have","we've":"we have","i'll":"i will","you'll":"you will","we'll":"we will","it'll":"it will","i'd":"i would","you'd":"you would","don't":"do not","doesn't":"does not","didn't":"did not","can't":"can not","cannot":"can not","won't":"will not","isn't":"is not","aren't":"are not","wasn't":"was not","weren't":"were not","haven't":"have not","hasn't":"has not","wouldn't":"would not","couldn't":"could not","shouldn't":"should not","let's":"let us","okay":"ok"};
+function normParts(w){
+  let x = w.toLowerCase().replace(/[’‘]/g,"'").replace(/[^a-z0-9'\-]/g,'').replace(/^'+|'+$/g,'');
+  if (!x) return [];
+  if (CONTR[x]) return CONTR[x].split(' ');
+  if (NUM[x]) return [NUM[x]];
+  return x.split('-').filter(Boolean);
+}
+function lcsFlags(a, b){
+  const n = a.length, m = b.length;
+  const dp = Array.from({length:n+1}, () => new Uint16Array(m+1));
+  for (let i=n-1;i>=0;i--) for (let j=m-1;j>=0;j--)
+    dp[i][j] = a[i] === b[j] ? dp[i+1][j+1] + 1 : Math.max(dp[i+1][j], dp[i][j+1]);
+  const flags = new Array(n).fill(false); let i=0, j=0;
+  while (i<n && j<m){
+    if (a[i] === b[j]){ flags[i] = true; i++; j++; }
+    else if (dp[i+1][j] >= dp[i][j+1]) i++; else j++;
+  }
+  return {flags, count: dp[0][0]};
+}
+function tokenize(sentence){
+  return sentence.split(/\s+/).filter(Boolean).map(raw => ({raw, parts: normParts(raw)}));
+}
+function evaluate(sentence, alts){
+  const words = tokenize(sentence);
+  const flat = [], owner = [];
+  words.forEach((w, wi) => w.parts.forEach(p => { flat.push(p); owner.push(wi); }));
+  let best = null;
+  for (const alt of alts){
+    const heard = alt.t.split(/\s+/).flatMap(normParts);
+    const r = lcsFlags(flat, heard);
+    if (!best || r.count > best.count) best = {...r, t: alt.t, c: alt.c};
+  }
+  if (!best || !flat.length) return null;
+  const okWord = words.map(() => true), scored = words.map(w => w.parts.length > 0);
+  best.flags.forEach((f, k) => { if (!f) okWord[owner[k]] = false; });
+  const total = scored.filter(Boolean).length;
+  const good = okWord.filter((ok, i) => ok && scored[i]).length;
+  const missed = words.filter((w, i) => scored[i] && !okWord[i]).map(w => w.parts.join(' '));
+  return { score: Math.round(good / total * 100), heard: best.t, marks: okWord, missed, at: Date.now() };
+}
+
+/* ---------- speech synthesis ---------- */
+let VOICES = [];
+function loadVoices(){
+  VOICES = (window.speechSynthesis ? speechSynthesis.getVoices() : []).filter(v => /^en[-_]/i.test(v.lang));
+  renderAccents(); renderVoices();
+}
+const langOf = v => v.lang.replace('_','-');
+function voicesFor(code){ return VOICES.filter(v => langOf(v).toLowerCase() === code.toLowerCase()); }
+function currentVoice(){
+  const list = voicesFor(S.accent);
+  return list.find(v => v.voiceURI === S.voiceURI) || list.find(v => /natural|online|google/i.test(v.name)) || list[0] || null;
+}
+function speak(text, rate, done){
+  if (!window.speechSynthesis){ done && done(); return; }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  const v = currentVoice(); if (v) u.voice = v;
+  u.lang = S.accent; u.rate = rate || S.rate;
+  let fired = false; const fin = () => { if (!fired){ fired = true; done && done(); } };
+  u.onend = fin; u.onerror = fin;
+  setTimeout(() => speechSynthesis.speak(u), 60);
+}
+
+/* ---------- speech recognition ---------- */
+function listen(i, done){
+  if (!SR){ done && done(); return; }
+  if (!(micStream && micStream.active)) openMic();
+  stopRec();
+  const rec = new SR(); S.rec = rec;
+  rec.lang = S.accent; rec.interimResults = true; rec.maxAlternatives = 5; rec.continuous = false;
+  let alts = [], err = null;
+  setListening(i, true); showLive(i, '請開始說…');
+  rec.onresult = e => {
+    let interim = '';
+    for (let k = e.resultIndex; k < e.results.length; k++){
+      const r = e.results[k];
+      if (r.isFinal){ alts = Array.from(r).map(a => ({t: a.transcript, c: a.confidence})); }
+      else interim += r[0].transcript;
+    }
+    showLive(i, interim || (alts[0] && alts[0].t) || '…');
+    const soFar = Array.from(e.results).map(r => r[0].transcript).join(' ');
+    const live = evaluate(S.sentences[i], [{t: soFar, c: 0}]);
+    if (live) applyLive(i, live.marks);
+  };
+  rec.onerror = e => { err = e.error; };
+  rec.onend = () => {
+    setListening(i, false); S.rec = null;
+    if (err === 'not-allowed' || err === 'service-not-allowed'){
+      showMsg(i, '麥克風被拒絕了。請在網址列左邊的鎖頭圖示允許麥克風，再試一次。');
+    } else if (!alts.length){
+      showMsg(i, err === 'network' ? '辨識服務連不上，請確認網路連線。' : '沒聽到聲音，請靠近麥克風再試一次。');
+    } else {
+      const r = evaluate(S.sentences[i], alts);
+      if (r){ S.results[S.sentences[i]] = r; S.tries++; saveResults(); }
+      renderSentence(i); renderSummary();
+    }
+    done && done(!!alts.length);
+  };
+  try { rec.start(); } catch(e){ setListening(i, false); done && done(false); }
+}
+function stopRec(){ if (S.rec){ try{ S.rec.abort(); }catch(e){} S.rec = null; } }
+
+/* ---------- persistence ---------- */
+function loadDay(skipPull){
+  const saved = store.get('day:' + S.date, null);
+  S.sample = saved == null;
+  S.text = saved == null ? SAMPLE : saved;
+  S.sentences = splitSentences(S.text);
+  const r = store.get('res:' + S.date, {results:{}, tries:0});
+  S.results = r.results || {}; S.tries = r.tries || 0;
+  S.active = -1;
+  renderAll();
+  if (cloud.user && !skipPull) pullDay(S.date);
+}
+function saveResults(){ store.set('res:' + S.date, {results: S.results, tries: S.tries}); queuePush(S.date); }
+
+/* ---------- cloud sync (Supabase) ---------- */
+const cloud = { client: null, user: null, timers: {} };
+try { if (window.supabase) cloud.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e){}
+function syncMsg(t){ const el = $('#syncMsg'); if (el) el.textContent = t; }
+function rowToLocal(row){
+  if (row.material != null) store.set('day:' + row.day, row.material);
+  store.set('res:' + row.day, {results: row.results || {}, tries: row.tries || 0});
+}
+async function pullDay(day){
+  const {data, error} = await cloud.client.from('practice_days').select('*').eq('day', day).maybeSingle();
+  if (error){ syncMsg('讀取失敗，稍後再試'); return; }
+  if (data && day === S.date){
+    rowToLocal(data);
+    const saved = store.get('day:' + day, null);
+    S.sample = saved == null; S.text = saved == null ? SAMPLE : saved;
+    S.sentences = splitSentences(S.text);
+    S.results = data.results || {}; S.tries = data.tries || 0;
+    renderAll();
+  } else if (!data) queuePush(day);
+}
+function queuePush(day){
+  if (!cloud.user) return;
+  clearTimeout(cloud.timers[day]);
+  cloud.timers[day] = setTimeout(() => pushDay(day), 800);
+}
+async function pushDay(day){
+  const material = store.get('day:' + day, null);
+  const r = store.get('res:' + day, null);
+  if (material == null && !r) return;
+  syncMsg('同步中…');
+  const {error} = await cloud.client.from('practice_days').upsert({
+    user_id: cloud.user.id, day, material,
+    results: (r && r.results) || {}, tries: (r && r.tries) || 0, updated_at: new Date().toISOString()
+  });
+  syncMsg(error ? '同步失敗：' + error.message : '已同步 ' + new Date().toLocaleTimeString().slice(0,5));
+}
+async function onSignedIn(user){
+  cloud.user = user;
+  $('#authForm').hidden = true; $('#authOn').hidden = false; $('#authWho').textContent = user.email;
+  syncMsg('下載紀錄中…');
+  const {data, error} = await cloud.client.from('practice_days').select('*').order('day', {ascending:false}).limit(120);
+  if (error){ syncMsg('讀取失敗：' + error.message); return; }
+  const inCloud = new Set(data.map(r => r.day));
+  data.forEach(rowToLocal);
+  // upload days that exist only in this browser
+  store.keys().filter(k => /^(day|res):\d{4}-\d{2}-\d{2}$/.test(k)).map(k => k.slice(4))
+    .filter((d, i, a) => a.indexOf(d) === i && !inCloud.has(d)).forEach(pushDay);
+  syncMsg('已同步');
+  loadDay();
+}
+function onSignedOut(){
+  cloud.user = null;
+  $('#authForm').hidden = false; $('#authOn').hidden = true;
+}
+function authMsg(t, err){ const el = $('#authMsg'); el.textContent = t; el.classList.toggle('err', !!err); }
+const ERR = {'Invalid login credentials':'Email 或密碼不對。','Email not confirmed':'還沒驗證 Email，請先點信箱裡的確認連結。','User already registered':'這個 Email 已經註冊過，直接登入即可。'};
+if (cloud.client){
+  $('#authForm').onsubmit = async e => {
+    e.preventDefault(); authMsg('登入中…');
+    const {error} = await cloud.client.auth.signInWithPassword({email: $('#authEmail').value.trim(), password: $('#authPass').value});
+    if (error) authMsg(ERR[error.message] || error.message, true);
+  };
+  $('#signupBtn').onclick = async () => {
+    const email = $('#authEmail').value.trim(), password = $('#authPass').value;
+    if (!email || password.length < 6){ authMsg('請填 Email 和至少 6 碼的密碼。', true); return; }
+    authMsg('註冊中…');
+    const {data, error} = await cloud.client.auth.signUp({email, password, options:{emailRedirectTo: location.origin + location.pathname}});
+    if (error) authMsg(ERR[error.message] || error.message, true);
+    else if (!data.session) authMsg('已寄出確認信到 ' + email + '，點信中的連結後回來登入。');
+  };
+  $('#logoutBtn').onclick = () => cloud.client.auth.signOut();
+  cloud.client.auth.onAuthStateChange((ev, session) => {
+    const u = session && session.user;
+    if (u && (!cloud.user || cloud.user.id !== u.id)) onSignedIn(u);
+    else if (!u && cloud.user) onSignedOut();
+  });
+} else {
+  authMsg('雲端服務載入失敗，目前只存在這個瀏覽器。', true);
+  $('#loginBtn').disabled = true; $('#signupBtn').disabled = true;
+}
+
+/* ---------- rendering ---------- */
+function renderAccents(){
+  const box = $('#accents'); box.innerHTML = '';
+  ACCENTS.forEach(a => {
+    const n = voicesFor(a.code).length;
+    const b = document.createElement('button');
+    b.className = 'chip'; b.type = 'button';
+    b.setAttribute('aria-pressed', String(a.code === S.accent));
+    b.innerHTML = `${a.name} <small>${a.code}${n ? ' · ' + n : ''}</small>`;
+    b.title = n ? `${n} 個語音` : '這台裝置沒有這個口音的示範語音，但仍可用這個口音的辨識器來評分';
+    b.onclick = () => { S.accent = a.code; store.set('accent', a.code); renderAccents(); renderVoices(); };
+    box.appendChild(b);
+  });
+}
+function renderVoices(){
+  const sel = $('#voice'); sel.innerHTML = '';
+  const list = voicesFor(S.accent);
+  if (!list.length){
+    const o = document.createElement('option'); o.textContent = '此口音無內建語音，示範會用預設聲音';
+    sel.appendChild(o); sel.disabled = true; return;
+  }
+  sel.disabled = false;
+  const cur = currentVoice();
+  list.forEach(v => {
+    const o = document.createElement('option'); o.value = v.voiceURI;
+    o.textContent = v.name.replace(/^Microsoft\s+/,'').replace(/\s*-\s*English.*$/,'');
+    if (cur && v.voiceURI === cur.voiceURI) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+function scoreClass(s){ return s >= 85 ? 'good' : s >= 60 ? 'fair' : 'low'; }
+function renderSentence(i){
+  const li = document.querySelector(`.sent[data-i="${i}"]`); if (!li) return;
+  const s = S.sentences[i], r = S.results[s];
+  const words = tokenize(s);
+  const text = li.querySelector('.text'); text.innerHTML = '';
+  words.forEach((w, k) => {
+    const span = document.createElement('span');
+    span.className = 'w' + (r && w.parts.length ? (r.marks[k] ? ' ok' : ' miss') : '');
+    span.textContent = w.raw;
+    span.title = '點擊聽這個字';
+    span.onclick = () => speak(w.raw.replace(/[^A-Za-z0-9'’\-]/g,''), 0.7);
+    text.appendChild(span); text.appendChild(document.createTextNode(' '));
+  });
+  const res = li.querySelector('.result'); res.innerHTML = '';
+  if (r){
+    const sc = document.createElement('span'); sc.className = 'score ' + scoreClass(r.score); sc.textContent = r.score + ' 分';
+    const lab = document.createElement('span'); lab.textContent = '辨識到：';
+    const h = document.createElement('span'); h.className = 'heard'; h.textContent = '“' + r.heard + '”';
+    res.append(sc, lab, h);
+  }
+  li.classList.toggle('active', i === S.active);
+}
+function renderSentences(){
+  const ol = $('#sents'); ol.innerHTML = '';
+  S.sentences.forEach((s, i) => {
+    const li = document.createElement('li'); li.className = 'sent'; li.dataset.i = i;
+    li.innerHTML = `<div class="num">${String(i+1).padStart(2,'0')}</div><div class="text"></div>
+      <div class="acts"><button class="ibtn play" title="聽示範" aria-label="聽示範">${ICON_PLAY}</button>
+      <button class="ibtn mic" title="跟讀並評分" aria-label="跟讀並評分">${ICON_MIC}</button></div>
+      <div class="result"></div>`;
+    li.querySelector('.play').onclick = () => { setActive(i); speak(s); };
+    li.querySelector('.mic').onclick = () => { if (S.rec){ stopRec(); return; } setActive(i); speechSynthesis && speechSynthesis.cancel(); listen(i); };
+    ol.appendChild(li); renderSentence(i);
+  });
+  if (!S.sentences.length) ol.innerHTML = '<li class="empty">還沒有內容。按「編輯」貼上今天的英文資料。</li>';
+  $('#sampleTag').hidden = !S.sample;
+}
+function setActive(i){
+  const prev = S.active; S.active = i;
+  if (prev >= 0) renderSentence(prev);
+  if (i >= 0){ renderSentence(i); const el = document.querySelector(`.sent[data-i="${i}"]`); el && el.scrollIntoView({block:'nearest', behavior:'smooth'}); }
+}
+function setListening(i, on){ const b = document.querySelector(`.sent[data-i="${i}"] .mic`); b && b.classList.toggle('listening', on); }
+function showLive(i, t){ const r = document.querySelector(`.sent[data-i="${i}"] .result`); if (r){ r.innerHTML = ''; const s = document.createElement('span'); s.className = 'live'; s.textContent = t; r.appendChild(s); } }
+function showMsg(i, t){ showLive(i, t); }
+function applyLive(i, marks){
+  const spans = document.querySelectorAll(`.sent[data-i="${i}"] .text .w`);
+  const words = tokenize(S.sentences[i]);
+  spans.forEach((sp, k) => {
+    sp.classList.remove('ok', 'miss');
+    sp.classList.toggle('live-ok', !!(marks[k] && words[k] && words[k].parts.length));
+  });
+}
+function renderSummary(){
+  const rs = S.sentences.map(s => S.results[s]).filter(Boolean);
+  const avg = rs.length ? Math.round(rs.reduce((a, r) => a + r.score, 0) / rs.length) : null;
+  $('#avg').innerHTML = avg == null ? '–' : `${avg}<small> / 100</small>`;
+  $('#done').textContent = `${rs.length}/${S.sentences.length}`;
+  $('#tries').textContent = S.tries;
+  const missed = [...new Set(rs.flatMap(r => r.missed))];
+  const rv = $('#review'); rv.innerHTML = '';
+  if (!missed.length) rv.innerHTML = '<p class="empty">跟讀後，沒唸清楚的字會出現在這裡。</p>';
+  missed.forEach(w => { const b = document.createElement('button'); b.textContent = w; b.onclick = () => speak(w, 0.7); rv.appendChild(b); });
+  renderHistory();
+}
+function renderHistory(){
+  const bars = $('#bars'), bx = $('#barx'); bars.innerHTML = ''; bx.innerHTML = '';
+  const base = new Date(S.date + 'T00:00:00');
+  for (let k = 13; k >= 0; k--){
+    const d = new Date(base); d.setDate(d.getDate() - k);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    const key = d.toISOString().slice(0,10);
+    const r = store.get('res:' + key, null);
+    const vals = r ? Object.values(r.results || {}).map(x => x.score) : [];
+    const avg = vals.length ? Math.round(vals.reduce((a,b)=>a+b,0) / vals.length) : null;
+    const bar = document.createElement('div'); bar.className = 'bar' + (avg == null ? ' none' : '');
+    bar.style.height = (avg == null ? 2 : Math.max(4, avg)) + '%';
+    bar.title = key + (avg == null ? '：未練習' : `：${avg} 分`);
+    bars.appendChild(bar);
+    const x = document.createElement('div'); x.textContent = k % 2 === 0 ? key.slice(8) : ''; bx.appendChild(x);
+  }
+}
+function renderAll(){ renderSentences(); renderSummary(); }
+
+/* ---------- auto modes ---------- */
+function setRunning(on){ S.running = on; $('#stop').hidden = !on; $('#playAll').disabled = on; $('#shadowAll').disabled = on; }
+function runAll(shadow){
+  if (!S.sentences.length) return;
+  setRunning(true);
+  const start = S.active >= 0 && S.active < S.sentences.length - 1 ? S.active : 0;
+  const step = i => {
+    if (!S.running || i >= S.sentences.length){ setRunning(false); return; }
+    setActive(i);
+    speak(S.sentences[i], S.rate, () => {
+      if (!S.running) return;
+      if (shadow && SR) listen(i, () => setTimeout(() => step(i + 1), 900));
+      else setTimeout(() => step(i + 1), 450);
+    });
+  };
+  step(start);
+}
+function stopAll(){ setRunning(false); window.speechSynthesis && speechSynthesis.cancel(); stopRec(); }
+
+/* ---------- microphone: open once, keep for the whole session ---------- */
+let micStream = null;
+function micUI(state){
+  const b = $('#micBtn'); b.classList.remove('on','blocked');
+  if (state === 'on'){ b.classList.add('on'); $('#micLabel').textContent = '麥克風已開啟'; b.title = '這次開啟期間不會再詢問'; }
+  else if (state === 'blocked'){ b.classList.add('blocked'); $('#micLabel').textContent = '麥克風被封鎖'; b.title = '點網址列左邊的鎖頭圖示，把麥克風改成「允許」'; }
+  else { $('#micLabel').textContent = '開啟麥克風'; b.title = '允許一次，整個練習期間都不用再問'; }
+}
+async function openMic(){
+  if (micStream && micStream.active){ micUI('on'); return true; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ micUI('blocked'); return false; }
+  try{
+    micStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true}});
+    micStream.getTracks().forEach(t => t.onended = () => micUI('off'));
+    micUI('on'); store.set('micWanted', true); return true;
+  }catch(e){ micUI('blocked'); return false; }
+}
+$('#micBtn').onclick = openMic;
+(async () => {
+  try{
+    const p = await navigator.permissions.query({name:'microphone'});
+    const sync = () => { if (p.state === 'granted') openMic(); else if (p.state === 'denied') micUI('blocked'); else micUI('off'); };
+    p.onchange = sync; sync();
+  }catch(e){ micUI('off'); }
+})();
+
+/* ---------- wiring ---------- */
+$('#date').value = S.date;
+$('#date').onchange = e => { stopAll(); S.date = e.target.value || todayStr(); loadDay(); };
+$('#rate').value = S.rate; $('#rateOut').textContent = S.rate.toFixed(2) + '×';
+$('#rate').oninput = e => { S.rate = parseFloat(e.target.value); $('#rateOut').textContent = S.rate.toFixed(2) + '×'; store.set('rate', S.rate); };
+$('#voice').onchange = e => { S.voiceURI = e.target.value; store.set('voice', S.voiceURI); };
+$('#playAll').onclick = () => runAll(false);
+$('#shadowAll').onclick = () => runAll(true);
+$('#stop').onclick = stopAll;
+$('#editBtn').onclick = () => { $('#editor').hidden = false; $('#src').value = S.sample ? '' : S.text; $('#src').focus(); };
+$('#cancelBtn').onclick = () => { $('#editor').hidden = true; };
+$('#saveBtn').onclick = () => {
+  const t = $('#src').value.trim();
+  store.set('day:' + S.date, t);
+  $('#editor').hidden = true; loadDay(true);
+  if (cloud.user) pushDay(S.date);
+};
+document.addEventListener('keydown', e => {
+  if (e.target.matches('textarea,input,select')) return;
+  if (e.key === ' ' && S.active >= 0){ e.preventDefault(); speak(S.sentences[S.active]); }
+  if ((e.key === 'r' || e.key === 'R') && S.active >= 0){ listen(S.active); }
+  if (e.key === 'ArrowDown'){ e.preventDefault(); setActive(Math.min(S.sentences.length - 1, S.active + 1)); }
+  if (e.key === 'ArrowUp'){ e.preventDefault(); setActive(Math.max(0, S.active - 1)); }
+});
+
+if (window.speechSynthesis){ speechSynthesis.onvoiceschanged = loadVoices; }
+loadVoices(); loadDay();
+})();
+</script>
+</body>
+</html>
