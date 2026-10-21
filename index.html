@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>每日口說教練</title>
+<title>Speaking Coach</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Noto+Sans+TC:wght@400;500;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
@@ -29,6 +29,7 @@
   --good:#6FD39A; --good-bg:#183326; --warn:#F0BE62; --warn-bg:#3A2D12; --bad:#F2877B; --bad-bg:#3D1D19;
   color-scheme:dark}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);padding:0 16px}
 .wrap{max-width:1120px;margin:0 auto;padding-block:20px 48px;display:grid;gap:18px}
@@ -125,69 +126,69 @@ aside{display:grid;gap:18px}
 <div class="wrap">
   <header>
     <div>
-      <h1>每日口說教練</h1>
-      <p class="sub">聽各國口音示範，逐句跟讀，系統即時比對你說的每個字</p>
+      <h1>Speaking Coach</h1>
+      <p class="sub">Hear native accents, shadow each sentence, and see every word you say checked in real time</p>
     </div>
     <div class="datebox">
-      <label for="date" class="label" style="margin:0">練習日期</label>
+      <label for="date" class="label" style="margin:0">Practice date</label>
       <input type="date" id="date">
     </div>
   </header>
 
   <div id="srNotice" class="notice" hidden></div>
 
-  <section class="panel account" aria-label="雲端同步">
+  <section class="panel account" aria-label="Cloud sync">
     <form id="authForm" class="row">
-      <p class="label" style="margin:0">雲端同步</p>
+      <p class="label" style="margin:0">Cloud sync</p>
       <input type="email" id="authEmail" placeholder="Email" autocomplete="email" required>
-      <input type="password" id="authPass" placeholder="密碼（至少 6 碼）" autocomplete="current-password" minlength="6" required>
-      <button class="btn primary" type="submit" id="loginBtn">登入</button>
-      <button class="btn" type="button" id="signupBtn">註冊新帳號</button>
-      <span class="authmsg" id="authMsg">未登入時，紀錄只存在這個瀏覽器。</span>
+      <input type="password" id="authPass" placeholder="Password (min. 6 characters)" autocomplete="current-password" minlength="6" required>
+      <button class="btn primary" type="submit" id="loginBtn">Sign in</button>
+      <button class="btn" type="button" id="signupBtn">Create account</button>
+      <span class="authmsg" id="authMsg">Not signed in: progress is saved in this browser only.</span>
     </form>
     <div id="authOn" class="row" hidden>
       <span class="dot on"></span>
-      <span>已同步到雲端：<strong id="authWho"></strong></span>
+      <span>Synced to cloud: <strong id="authWho"></strong></span>
       <span class="authmsg" id="syncMsg"></span>
       <span class="spacer"></span>
-      <button class="btn" type="button" id="logoutBtn">登出</button>
+      <button class="btn" type="button" id="logoutBtn">Sign out</button>
     </div>
   </section>
 
-  <section class="panel controls" aria-label="發音設定">
+  <section class="panel controls" aria-label="Voice settings">
     <div>
-      <p class="label">示範口音</p>
+      <p class="label">Model accent</p>
       <div class="accents" id="accents"></div>
     </div>
     <div class="row">
-      <select id="voice" aria-label="語音"></select>
+      <select id="voice" aria-label="Voice"></select>
       <div class="rate">
-        <label for="rate">語速</label>
+        <label for="rate">Speed</label>
         <input type="range" id="rate" min="0.5" max="1.3" step="0.05">
         <output id="rateOut"></output>
       </div>
       <span class="spacer"></span>
-      <button class="btn" id="micBtn" aria-live="polite"><span class="dot" id="micDot"></span><span id="micLabel">開啟麥克風</span></button>
-      <button class="btn" id="playAll"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg>全部朗讀</button>
-      <button class="btn primary" id="shadowAll"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5.5" y="1.5" width="5" height="8.5" rx="2.5"/><path d="M3 7.5a5 5 0 0 0 10 0M8 12.5V15"/></svg>自動跟讀練習</button>
-      <button class="btn" id="stop" hidden>停止</button>
+      <button class="btn" id="micBtn" aria-live="polite"><span class="dot" id="micDot"></span><span id="micLabel">Turn on mic</span></button>
+      <button class="btn" id="playAll"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg>Read all</button>
+      <button class="btn primary" id="shadowAll"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5.5" y="1.5" width="5" height="8.5" rx="2.5"/><path d="M3 7.5a5 5 0 0 0 10 0M8 12.5V15"/></svg>Auto shadowing</button>
+      <button class="btn" id="stop" hidden>Stop</button>
     </div>
   </section>
 
   <div class="layout">
-    <section class="panel" aria-label="今日材料">
+    <section class="panel" aria-label="Today's material">
       <div class="script-head">
         <div class="row" style="gap:8px">
-          <p class="label" style="margin:0">今日材料</p>
-          <span class="tag" id="sampleTag" hidden>範例內容，按「編輯」貼上你的資料</span>
+          <p class="label" style="margin:0">Today's material</p>
+          <span class="tag" id="sampleTag" hidden>Sample text. Click Edit to paste your own</span>
         </div>
-        <button class="btn" id="editBtn">編輯</button>
+        <button class="btn" id="editBtn">Edit</button>
       </div>
       <div id="editor" hidden>
-        <textarea id="src" placeholder="把今天的英文口說資料貼在這裡，一段或多段都可以。"></textarea>
+        <textarea id="src" placeholder="Paste today's English speaking material here. One or more paragraphs."></textarea>
         <div class="row" style="margin-top:10px">
-          <button class="btn primary" id="saveBtn">儲存並開始練習</button>
-          <button class="btn" id="cancelBtn">取消</button>
+          <button class="btn primary" id="saveBtn">Save and start</button>
+          <button class="btn" id="cancelBtn">Cancel</button>
         </div>
       </div>
       <ol class="sents" id="sents"></ol>
@@ -195,23 +196,23 @@ aside{display:grid;gap:18px}
 
     <aside>
       <section class="panel">
-        <p class="label">今日平均分數</p>
+        <p class="label">Today's average</p>
         <div class="big" id="avg">–</div>
         <div class="stats" style="margin-top:14px">
-          <div class="stat"><div class="v" id="done">0/0</div><div class="k">已練句數</div></div>
-          <div class="stat"><div class="v" id="tries">0</div><div class="k">跟讀次數</div></div>
+          <div class="stat"><div class="v" id="done">0/0</div><div class="k">Sentences done</div></div>
+          <div class="stat"><div class="v" id="tries">0</div><div class="k">Attempts</div></div>
         </div>
       </section>
       <section class="panel">
-        <p class="label">待加強單字（點擊聽慢速發音）</p>
+        <p class="label">Words to review (click to hear slowly)</p>
         <div class="review" id="review"></div>
       </section>
       <section class="panel">
-        <p class="label">近 14 天平均分數</p>
+        <p class="label">Daily average, last 14 days</p>
         <div class="bars" id="bars"></div>
         <div class="bar-x" id="barx"></div>
       </section>
-      <p class="foot">評分方式：用瀏覽器語音辨識聽你說的話，再逐字對照原文。綠色是辨識正確的字，紅色波浪線是沒被辨識出或唸錯的字。它評的是「母語者聽不聽得懂」，不是音素級的分析；同一句換不同口音的辨識器（上方切換）也可以練。</p>
+      <p class="foot">How scoring works: the browser's speech recognition listens to you, then compares what it heard with the text word by word. Green words were recognized correctly; red wavy underlines mark words that were missed or misheard. It measures whether a native listener would understand you, not individual sounds. Try the same sentence with a different accent selected above.</p>
     </aside>
   </div>
 </div>
@@ -228,9 +229,9 @@ const store = {
   keys(){ try{ return Object.keys(localStorage); }catch(e){ return []; } }
 };
 const ACCENTS = [
-  {code:'en-US', name:'美式'}, {code:'en-GB', name:'英式'}, {code:'en-AU', name:'澳洲'},
-  {code:'en-CA', name:'加拿大'}, {code:'en-IE', name:'愛爾蘭'}, {code:'en-IN', name:'印度'},
-  {code:'en-NZ', name:'紐西蘭'}, {code:'en-ZA', name:'南非'}, {code:'en-SG', name:'新加坡'}
+  {code:'en-US', name:'American'}, {code:'en-GB', name:'British'}, {code:'en-AU', name:'Australian'},
+  {code:'en-CA', name:'Canadian'}, {code:'en-IE', name:'Irish'}, {code:'en-IN', name:'Indian'},
+  {code:'en-NZ', name:'New Zealand'}, {code:'en-ZA', name:'South African'}, {code:'en-SG', name:'Singaporean'}
 ];
 const SAMPLE = "Good morning. Today I want to talk about my plans for the weekend. On Saturday, I will visit my grandparents in the countryside. The weather should be clear and comfortable. Could you recommend a quiet place to have lunch nearby? I usually practice English for twenty minutes every morning.";
 
@@ -251,7 +252,7 @@ const S = {
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (!SR){
   const n = $('#srNotice'); n.hidden = false;
-  n.textContent = '這個瀏覽器不支援語音辨識，只能聽示範。請改用 Chrome 或 Microsoft Edge 開啟這個檔案，才能糾正發音。';
+  n.textContent = 'This browser has no speech recognition, so you can only listen. Open this page in Chrome or Microsoft Edge to get pronunciation feedback.';
 }
 
 /* ---------- text processing ---------- */
@@ -333,7 +334,7 @@ function listen(i, done){
   const rec = new SR(); S.rec = rec;
   rec.lang = S.accent; rec.interimResults = true; rec.maxAlternatives = 5; rec.continuous = false;
   let alts = [], err = null;
-  setListening(i, true); showLive(i, '請開始說…');
+  setListening(i, true); showLive(i, 'Start speaking…');
   rec.onresult = e => {
     let interim = '';
     for (let k = e.resultIndex; k < e.results.length; k++){
@@ -350,9 +351,9 @@ function listen(i, done){
   rec.onend = () => {
     setListening(i, false); S.rec = null;
     if (err === 'not-allowed' || err === 'service-not-allowed'){
-      showMsg(i, '麥克風被拒絕了。請在網址列左邊的鎖頭圖示允許麥克風，再試一次。');
+      showMsg(i, 'Microphone access was denied. Click the lock icon left of the address bar, allow the microphone, and try again.');
     } else if (!alts.length){
-      showMsg(i, err === 'network' ? '辨識服務連不上，請確認網路連線。' : '沒聽到聲音，請靠近麥克風再試一次。');
+      showMsg(i, err === 'network' ? "Can't reach the speech service. Check your internet connection." : "Didn't hear anything. Move closer to the mic and try again.");
     } else {
       const r = evaluate(S.sentences[i], alts);
       if (r){ S.results[S.sentences[i]] = r; S.tries++; saveResults(); }
@@ -388,7 +389,7 @@ function rowToLocal(row){
 }
 async function pullDay(day){
   const {data, error} = await cloud.client.from('practice_days').select('*').eq('day', day).maybeSingle();
-  if (error){ syncMsg('讀取失敗，稍後再試'); return; }
+  if (error){ syncMsg("Couldn't load. Try again later."); return; }
   if (data && day === S.date){
     rowToLocal(data);
     const saved = store.get('day:' + day, null);
@@ -407,25 +408,25 @@ async function pushDay(day){
   const material = store.get('day:' + day, null);
   const r = store.get('res:' + day, null);
   if (material == null && !r) return;
-  syncMsg('同步中…');
+  syncMsg('Syncing…');
   const {error} = await cloud.client.from('practice_days').upsert({
     user_id: cloud.user.id, day, material,
     results: (r && r.results) || {}, tries: (r && r.tries) || 0, updated_at: new Date().toISOString()
   });
-  syncMsg(error ? '同步失敗：' + error.message : '已同步 ' + new Date().toLocaleTimeString().slice(0,5));
+  syncMsg(error ? 'Sync failed: ' + error.message : 'Synced ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
 }
 async function onSignedIn(user){
   cloud.user = user;
   $('#authForm').hidden = true; $('#authOn').hidden = false; $('#authWho').textContent = user.email;
-  syncMsg('下載紀錄中…');
+  syncMsg('Loading your history…');
   const {data, error} = await cloud.client.from('practice_days').select('*').order('day', {ascending:false}).limit(120);
-  if (error){ syncMsg('讀取失敗：' + error.message); return; }
+  if (error){ syncMsg('Load failed: ' + error.message); return; }
   const inCloud = new Set(data.map(r => r.day));
   data.forEach(rowToLocal);
   // upload days that exist only in this browser
   store.keys().filter(k => /^(day|res):\d{4}-\d{2}-\d{2}$/.test(k)).map(k => k.slice(4))
     .filter((d, i, a) => a.indexOf(d) === i && !inCloud.has(d)).forEach(pushDay);
-  syncMsg('已同步');
+  syncMsg('Synced');
   loadDay();
 }
 function onSignedOut(){
@@ -433,20 +434,20 @@ function onSignedOut(){
   $('#authForm').hidden = false; $('#authOn').hidden = true;
 }
 function authMsg(t, err){ const el = $('#authMsg'); el.textContent = t; el.classList.toggle('err', !!err); }
-const ERR = {'Invalid login credentials':'Email 或密碼不對。','Email not confirmed':'還沒驗證 Email，請先點信箱裡的確認連結。','User already registered':'這個 Email 已經註冊過，直接登入即可。'};
+const ERR = {'Invalid login credentials':'Wrong email or password.','Email not confirmed':'Email not confirmed yet. Click the link in the confirmation email first.','User already registered':'This email already has an account. Just sign in.'};
 if (cloud.client){
   $('#authForm').onsubmit = async e => {
-    e.preventDefault(); authMsg('登入中…');
+    e.preventDefault(); authMsg('Signing in…');
     const {error} = await cloud.client.auth.signInWithPassword({email: $('#authEmail').value.trim(), password: $('#authPass').value});
     if (error) authMsg(ERR[error.message] || error.message, true);
   };
   $('#signupBtn').onclick = async () => {
     const email = $('#authEmail').value.trim(), password = $('#authPass').value;
-    if (!email || password.length < 6){ authMsg('請填 Email 和至少 6 碼的密碼。', true); return; }
-    authMsg('註冊中…');
+    if (!email || password.length < 6){ authMsg('Enter an email and a password of at least 6 characters.', true); return; }
+    authMsg('Creating account…');
     const {data, error} = await cloud.client.auth.signUp({email, password, options:{emailRedirectTo: location.origin + location.pathname}});
     if (error) authMsg(ERR[error.message] || error.message, true);
-    else if (!data.session) authMsg('已寄出確認信到 ' + email + '，點信中的連結後回來登入。');
+    else if (!data.session) authMsg('Confirmation email sent to ' + email + '. Click the link in it, then come back and sign in.');
   };
   $('#logoutBtn').onclick = () => cloud.client.auth.signOut();
   cloud.client.auth.onAuthStateChange((ev, session) => {
@@ -455,7 +456,7 @@ if (cloud.client){
     else if (!u && cloud.user) onSignedOut();
   });
 } else {
-  authMsg('雲端服務載入失敗，目前只存在這個瀏覽器。', true);
+  authMsg('Cloud sync failed to load. Progress is saved in this browser only.', true);
   $('#loginBtn').disabled = true; $('#signupBtn').disabled = true;
 }
 
@@ -468,7 +469,7 @@ function renderAccents(){
     b.className = 'chip'; b.type = 'button';
     b.setAttribute('aria-pressed', String(a.code === S.accent));
     b.innerHTML = `${a.name} <small>${a.code}${n ? ' · ' + n : ''}</small>`;
-    b.title = n ? `${n} 個語音` : '這台裝置沒有這個口音的示範語音，但仍可用這個口音的辨識器來評分';
+    b.title = n ? `${n} voice${n>1?'s':''}` : 'No built-in voice for this accent on this device, but you can still be scored with this accent\'s recognizer';
     b.onclick = () => { S.accent = a.code; store.set('accent', a.code); renderAccents(); renderVoices(); };
     box.appendChild(b);
   });
@@ -477,7 +478,7 @@ function renderVoices(){
   const sel = $('#voice'); sel.innerHTML = '';
   const list = voicesFor(S.accent);
   if (!list.length){
-    const o = document.createElement('option'); o.textContent = '此口音無內建語音，示範會用預設聲音';
+    const o = document.createElement('option'); o.textContent = 'No voice for this accent; the default voice will be used';
     sel.appendChild(o); sel.disabled = true; return;
   }
   sel.disabled = false;
@@ -499,14 +500,14 @@ function renderSentence(i){
     const span = document.createElement('span');
     span.className = 'w' + (r && w.parts.length ? (r.marks[k] ? ' ok' : ' miss') : '');
     span.textContent = w.raw;
-    span.title = '點擊聽這個字';
+    span.title = 'Click to hear this word';
     span.onclick = () => speak(w.raw.replace(/[^A-Za-z0-9'’\-]/g,''), 0.7);
     text.appendChild(span); text.appendChild(document.createTextNode(' '));
   });
   const res = li.querySelector('.result'); res.innerHTML = '';
   if (r){
-    const sc = document.createElement('span'); sc.className = 'score ' + scoreClass(r.score); sc.textContent = r.score + ' 分';
-    const lab = document.createElement('span'); lab.textContent = '辨識到：';
+    const sc = document.createElement('span'); sc.className = 'score ' + scoreClass(r.score); sc.textContent = r.score + ' pts';
+    const lab = document.createElement('span'); lab.textContent = 'Heard:';
     const h = document.createElement('span'); h.className = 'heard'; h.textContent = '“' + r.heard + '”';
     res.append(sc, lab, h);
   }
@@ -517,14 +518,14 @@ function renderSentences(){
   S.sentences.forEach((s, i) => {
     const li = document.createElement('li'); li.className = 'sent'; li.dataset.i = i;
     li.innerHTML = `<div class="num">${String(i+1).padStart(2,'0')}</div><div class="text"></div>
-      <div class="acts"><button class="ibtn play" title="聽示範" aria-label="聽示範">${ICON_PLAY}</button>
-      <button class="ibtn mic" title="跟讀並評分" aria-label="跟讀並評分">${ICON_MIC}</button></div>
+      <div class="acts"><button class="ibtn play" title="Listen" aria-label="Listen">${ICON_PLAY}</button>
+      <button class="ibtn mic" title="Repeat and get scored" aria-label="Repeat and get scored">${ICON_MIC}</button></div>
       <div class="result"></div>`;
     li.querySelector('.play').onclick = () => { setActive(i); speak(s); };
     li.querySelector('.mic').onclick = () => { if (S.rec){ stopRec(); return; } setActive(i); speechSynthesis && speechSynthesis.cancel(); listen(i); };
     ol.appendChild(li); renderSentence(i);
   });
-  if (!S.sentences.length) ol.innerHTML = '<li class="empty">還沒有內容。按「編輯」貼上今天的英文資料。</li>';
+  if (!S.sentences.length) ol.innerHTML = '<li class="empty">Nothing here yet. Click Edit to paste today&rsquo;s English material.</li>';
   $('#sampleTag').hidden = !S.sample;
 }
 function setActive(i){
@@ -551,7 +552,7 @@ function renderSummary(){
   $('#tries').textContent = S.tries;
   const missed = [...new Set(rs.flatMap(r => r.missed))];
   const rv = $('#review'); rv.innerHTML = '';
-  if (!missed.length) rv.innerHTML = '<p class="empty">跟讀後，沒唸清楚的字會出現在這裡。</p>';
+  if (!missed.length) rv.innerHTML = '<p class="empty">Words you didn&rsquo;t say clearly will appear here after you practice.</p>';
   missed.forEach(w => { const b = document.createElement('button'); b.textContent = w; b.onclick = () => speak(w, 0.7); rv.appendChild(b); });
   renderHistory();
 }
@@ -567,7 +568,7 @@ function renderHistory(){
     const avg = vals.length ? Math.round(vals.reduce((a,b)=>a+b,0) / vals.length) : null;
     const bar = document.createElement('div'); bar.className = 'bar' + (avg == null ? ' none' : '');
     bar.style.height = (avg == null ? 2 : Math.max(4, avg)) + '%';
-    bar.title = key + (avg == null ? '：未練習' : `：${avg} 分`);
+    bar.title = key + (avg == null ? ': no practice' : `: ${avg} pts`);
     bars.appendChild(bar);
     const x = document.createElement('div'); x.textContent = k % 2 === 0 ? key.slice(8) : ''; bx.appendChild(x);
   }
@@ -597,9 +598,9 @@ function stopAll(){ setRunning(false); window.speechSynthesis && speechSynthesis
 let micStream = null;
 function micUI(state){
   const b = $('#micBtn'); b.classList.remove('on','blocked');
-  if (state === 'on'){ b.classList.add('on'); $('#micLabel').textContent = '麥克風已開啟'; b.title = '這次開啟期間不會再詢問'; }
-  else if (state === 'blocked'){ b.classList.add('blocked'); $('#micLabel').textContent = '麥克風被封鎖'; b.title = '點網址列左邊的鎖頭圖示，把麥克風改成「允許」'; }
-  else { $('#micLabel').textContent = '開啟麥克風'; b.title = '允許一次，整個練習期間都不用再問'; }
+  if (state === 'on'){ b.classList.add('on'); $('#micLabel').textContent = 'Mic on'; b.title = 'You will not be asked again while this page is open'; }
+  else if (state === 'blocked'){ b.classList.add('blocked'); $('#micLabel').textContent = 'Mic blocked'; b.title = 'Click the lock icon left of the address bar and set Microphone to Allow'; }
+  else { $('#micLabel').textContent = 'Turn on mic'; b.title = 'Allow once and you will not be asked again during practice'; }
 }
 async function openMic(){
   if (micStream && micStream.active){ micUI('on'); return true; }
