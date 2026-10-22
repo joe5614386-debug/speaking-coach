@@ -103,7 +103,10 @@ ol.sents{list-style:none;margin:0;padding:0;display:grid;gap:2px}
 .score.fair{background:var(--warn-bg);color:var(--warn)}
 .score.low{background:var(--bad-bg);color:var(--bad)}
 .heard{font-family:var(--f-read);font-style:italic;color:var(--ink);overflow-wrap:anywhere}
-.live{font-style:italic;color:var(--muted)}
+.live{font-style:italic;color:var(--muted);overflow-wrap:anywhere}
+.timer{display:inline-block;width:90px;height:6px;border-radius:3px;background:var(--line);overflow:hidden;align-self:center}
+.timer i{display:block;height:100%;background:var(--rec);transition:width .2s linear}
+.secs{font-family:var(--f-mono);font-size:12px;color:var(--rec);font-variant-numeric:tabular-nums;min-width:2.5em}
 
 aside{display:grid;gap:18px}
 .big{font-family:var(--f-display);font-weight:700;font-size:44px;line-height:1;font-variant-numeric:tabular-nums}
@@ -212,7 +215,7 @@ aside{display:grid;gap:18px}
         <div class="bars" id="bars"></div>
         <div class="bar-x" id="barx"></div>
       </section>
-      <p class="foot">How scoring works: the browser's speech recognition listens to you, then compares what it heard with the text word by word. Green words were recognized correctly; red wavy underlines mark words that were missed or misheard. It measures whether a native listener would understand you, not individual sounds. Try the same sentence with a different accent selected above.</p>
+      <p class="foot">How scoring works: the browser's speech recognition listens to you, then compares what it heard with the text word by word. Green words were recognized correctly; red wavy underlines mark words that were missed or misheard. You get up to 15 seconds per sentence and can repeat it 2–3 times; a word counts as correct if any attempt got it right. Listening stops early once every word is correct, or after a few seconds of silence. It measures whether a native listener would understand you, not individual sounds. Try the same sentence with a different accent selected above.</p>
     </aside>
   </div>
 </div>
@@ -327,43 +330,112 @@ function speak(text, rate, done){
 }
 
 /* ---------- speech recognition ---------- */
+/* One listening session per sentence:
+   - stays open up to LISTEN_MS, restarting the recognizer if the browser cuts it off after a pause
+   - the speaker may repeat the sentence several times; a word counts as correct if it was
+     heard correctly in ANY attempt (union of all attempts and all recognizer alternatives)
+   - ends early when every word is correct, after SILENCE_MS of quiet once something was heard,
+     or when the mic button is pressed again */
+const LISTEN_MS = 15000, SILENCE_MS = 3500;
 function listen(i, done){
   if (!SR){ done && done(); return; }
   if (!(micStream && micStream.active)) openMic();
   stopRec();
-  const rec = new SR(); S.rec = rec;
-  rec.lang = S.accent; rec.interimResults = true; rec.maxAlternatives = 5; rec.continuous = false;
-  let alts = [], err = null;
-  setListening(i, true); showLive(i, 'Start speaking…');
-  rec.onresult = e => {
-    let interim = '';
-    for (let k = e.resultIndex; k < e.results.length; k++){
-      const r = e.results[k];
-      if (r.isFinal){ alts = Array.from(r).map(a => ({t: a.transcript, c: a.confidence})); }
-      else interim += r[0].transcript;
+  const sentence = S.sentences[i];
+  const words = tokenize(sentence);
+  const scored = words.map(w => w.parts.length > 0);
+  const ses = { i, finals: [], interim: '', ok: scored.map(s => !s), err: null, closed: false,
+                start: Date.now(), lastHeard: 0, rec: null, tick: null };
+  S.session = ses;
+  const allOk = () => ses.ok.every(Boolean);
+  const absorb = alts => {
+    for (const a of alts){
+      if (!a.t || !a.t.trim()) continue;
+      const r = evaluate(sentence, [a]);
+      if (r) r.marks.forEach((m, k) => { if (m && scored[k]) ses.ok[k] = true; });
     }
-    showLive(i, interim || (alts[0] && alts[0].t) || '…');
-    const soFar = Array.from(e.results).map(r => r[0].transcript).join(' ');
-    const live = evaluate(S.sentences[i], [{t: soFar, c: 0}]);
-    if (live) applyLive(i, live.marks);
   };
-  rec.onerror = e => { err = e.error; };
-  rec.onend = () => {
-    setListening(i, false); S.rec = null;
-    if (err === 'not-allowed' || err === 'service-not-allowed'){
+  const view = () => {
+    const left = Math.max(0, LISTEN_MS - (Date.now() - ses.start));
+    const res = document.querySelector(`.sent[data-i="${i}"] .result`);
+    if (!res) return;
+    res.innerHTML = '';
+    const bar = document.createElement('span'); bar.className = 'timer';
+    const fill = document.createElement('i'); fill.style.width = (left / LISTEN_MS * 100) + '%'; bar.appendChild(fill);
+    const secs = document.createElement('span'); secs.className = 'secs'; secs.textContent = Math.ceil(left / 1000) + 's';
+    const msg = document.createElement('span'); msg.className = 'live';
+    const said = ses.finals.concat(ses.interim ? [ses.interim] : []).join(' / ');
+    msg.textContent = said || 'Speak now. You can repeat the sentence 2–3 times.';
+    res.append(bar, secs, msg);
+    const live = ses.ok.slice();
+    if (ses.interim){ const lr = evaluate(sentence, [{t: ses.interim}]); if (lr) lr.marks.forEach((m, k) => { if (m) live[k] = true; }); }
+    applyLive(i, live);
+  };
+  const finish = () => {
+    if (ses.closed) return;
+    ses.closed = true; clearInterval(ses.tick);
+    if (S.session === ses) S.session = null;
+    if (ses.rec){ ses.rec.onend = null; ses.rec.onresult = null; try { ses.rec.abort(); } catch(e){} }
+    S.rec = null; setListening(i, false);
+    if (ses.interim) ses.finals.push(ses.interim.trim());
+    absorb([{t: ses.interim}]);
+    const heardAny = ses.finals.some(t => t);
+    if (ses.err === 'not-allowed' || ses.err === 'service-not-allowed'){
       showMsg(i, 'Microphone access was denied. Click the lock icon left of the address bar, allow the microphone, and try again.');
-    } else if (!alts.length){
-      showMsg(i, err === 'network' ? "Can't reach the speech service. Check your internet connection." : "Didn't hear anything. Move closer to the mic and try again.");
+    } else if (!heardAny){
+      showMsg(i, ses.err === 'network' ? "Can't reach the speech service. Check your internet connection." : "Didn't hear anything. Move closer to the mic and try again.");
     } else {
-      const r = evaluate(S.sentences[i], alts);
-      if (r){ S.results[S.sentences[i]] = r; S.tries++; saveResults(); }
+      const total = scored.filter(Boolean).length || 1;
+      const good = ses.ok.filter((m, k) => m && scored[k]).length;
+      const r = { score: Math.round(good / total * 100), heard: ses.finals.filter(Boolean).join(' / '),
+                  marks: ses.ok.slice(), missed: words.filter((w, k) => scored[k] && !ses.ok[k]).map(w => w.parts.join(' ')),
+                  attempts: ses.finals.length, at: Date.now() };
+      S.results[sentence] = r; S.tries++; saveResults();
       renderSentence(i); renderSummary();
     }
-    done && done(!!alts.length);
+    done && done(heardAny);
   };
-  try { rec.start(); } catch(e){ setListening(i, false); done && done(false); }
+  ses.finish = finish;
+  const startRec = () => {
+    const rec = new SR(); ses.rec = rec; S.rec = rec;
+    rec.lang = S.accent; rec.interimResults = true; rec.maxAlternatives = 5; rec.continuous = true;
+    rec.onresult = e => {
+      let interim = '';
+      for (let k = e.resultIndex; k < e.results.length; k++){
+        const r = e.results[k];
+        if (r.isFinal){
+          const alts = Array.from(r).map(a => ({t: a.transcript, c: a.confidence}));
+          ses.finals.push((alts[0] && alts[0].t || '').trim());
+          absorb(alts);
+          absorb([{t: ses.finals.join(' ')}]);   // a sentence split across two pauses still counts
+        } else interim += r[0].transcript;
+      }
+      ses.interim = interim.trim(); ses.lastHeard = Date.now();
+      view();
+      if (allOk()) setTimeout(finish, 250);
+    };
+    rec.onerror = e => { if (e.error !== 'no-speech' && e.error !== 'aborted') ses.err = e.error; };
+    rec.onend = () => {
+      if (ses.closed) return;
+      const fatal = ['not-allowed', 'service-not-allowed', 'network', 'audio-capture'].includes(ses.err);
+      if (!fatal && Date.now() - ses.start < LISTEN_MS - 500){
+        if (ses.interim){ ses.finals.push(ses.interim); absorb([{t: ses.interim}]); ses.interim = ''; }
+        try { startRec(); } catch(e){ finish(); }
+      } else finish();
+    };
+    rec.start();
+  };
+  setListening(i, true); view();
+  ses.tick = setInterval(() => {
+    if (ses.closed) return;
+    const elapsed = Date.now() - ses.start;
+    if (elapsed >= LISTEN_MS) { finish(); return; }
+    if (ses.lastHeard && !ses.interim && Date.now() - ses.lastHeard > SILENCE_MS) { finish(); return; }
+    view();
+  }, 200);
+  try { startRec(); } catch(e){ finish(); }
 }
-function stopRec(){ if (S.rec){ try{ S.rec.abort(); }catch(e){} S.rec = null; } }
+function stopRec(){ if (S.session) S.session.finish(); else if (S.rec){ try{ S.rec.abort(); }catch(e){} S.rec = null; } }
 
 /* ---------- persistence ---------- */
 function loadDay(skipPull){
@@ -522,7 +594,7 @@ function renderSentences(){
       <button class="ibtn mic" title="Repeat and get scored" aria-label="Repeat and get scored">${ICON_MIC}</button></div>
       <div class="result"></div>`;
     li.querySelector('.play').onclick = () => { setActive(i); speak(s); };
-    li.querySelector('.mic').onclick = () => { if (S.rec){ stopRec(); return; } setActive(i); speechSynthesis && speechSynthesis.cancel(); listen(i); };
+    li.querySelector('.mic').onclick = () => { if (S.session){ S.session.finish(); return; } setActive(i); speechSynthesis && speechSynthesis.cancel(); listen(i); };
     ol.appendChild(li); renderSentence(i);
   });
   if (!S.sentences.length) ol.innerHTML = '<li class="empty">Nothing here yet. Click Edit to paste today&rsquo;s English material.</li>';
