@@ -94,6 +94,8 @@ ol.sents{list-style:none;margin:0;padding:0;display:grid;gap:2px}
 .ibtn{width:36px;height:36px;border-radius:999px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center}
 .ibtn svg{width:16px;height:16px}
 .ibtn:disabled{opacity:.5;cursor:progress}
+.toggle{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);cursor:pointer;user-select:none}
+.toggle input{width:16px;height:16px;accent-color:var(--accent);margin:0}
 .dlrow{padding-top:12px;border-top:1px solid var(--line)}
 .ibtn.listening{background:var(--rec);border-color:var(--rec);color:#fff;animation:pulse 1.1s ease-in-out infinite}
 @keyframes pulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--rec) 25%,transparent)}}
@@ -114,6 +116,20 @@ aside{display:grid;gap:18px}
 .big{font-family:var(--f-display);font-weight:700;font-size:44px;line-height:1;font-variant-numeric:tabular-nums}
 .big small{font-size:16px;color:var(--muted);font-weight:500}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.usage{display:grid;gap:8px}
+.usage-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.pill{font-size:12px;font-weight:500;border-radius:999px;padding:2px 10px;background:var(--sunk);color:var(--muted)}
+.pill.good{background:var(--good-bg);color:var(--good)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.usage-num{font-size:13px;color:var(--muted)}
+.usage-num b{font-family:var(--f-mono);font-size:20px;color:var(--ink);font-variant-numeric:tabular-nums}
+.meter{position:relative;height:8px;border-radius:4px;background:var(--sunk);overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:var(--good);transition:width .4s}
+.meter i.warn{background:var(--warn)} .meter i.bad{background:var(--bad)}
+.meter .tick{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
+.usage-note{margin:0;font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums}
+.usage-foot{margin:0;font-size:12px;color:var(--muted);line-height:1.5}
 .stat .v{font-family:var(--f-mono);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
 .stat .k{font-size:12px;color:var(--muted)}
 .review{display:flex;flex-wrap:wrap;gap:6px}
@@ -172,6 +188,7 @@ aside{display:grid;gap:18px}
         <input type="range" id="rate" min="0.5" max="1.3" step="0.05">
         <output id="rateOut"></output>
       </div>
+      <label class="toggle" for="whole"><input type="checkbox" id="whole"> Read as one passage</label>
       <span class="spacer"></span>
       <button class="btn" id="micBtn" aria-live="polite"><span class="dot" id="micDot"></span><span id="micLabel">Turn on mic</span></button>
       <button class="btn" id="playAll"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg>Read all</button>
@@ -217,6 +234,16 @@ aside{display:grid;gap:18px}
           <div class="stat"><div class="v" id="tries">0</div><div class="k">Attempts</div></div>
         </div>
       </section>
+      <section class="panel usage" aria-label="MP3 voice usage this month">
+        <div class="usage-head">
+          <p class="label" style="margin:0">MP3 voice usage · this month</p>
+          <span class="pill" id="usagePill">–</span>
+        </div>
+        <div class="usage-num"><b id="usageUsed">–</b> / <span id="usageLimit">500,000</span> characters</div>
+        <div class="meter" role="presentation"><i id="usageBar"></i><span class="tick" style="left:80%"></span></div>
+        <p class="usage-note" id="usageNote">Sign in to see this month’s usage.</p>
+        <p class="usage-foot">Azure free tier (F0): 500,000 characters per month, shared by everyone who downloads. Playing audio in the browser is free and not counted.</p>
+      </section>
       <section class="panel">
         <p class="label">Words to review (click to hear slowly)</p>
         <div class="review" id="review"></div>
@@ -258,6 +285,7 @@ function todayStr(){ const d = new Date(); d.setMinutes(d.getMinutes() - d.getTi
 const S = {
   date: todayStr(),
   accent: store.get('accent', 'en-US'),
+  whole: store.get('whole', false),
   voiceURI: store.get('voice', ''),
   rate: store.get('rate', 0.95),
   text: '', sample: false, sentences: [], results: {}, tries: 0,
@@ -274,6 +302,12 @@ if (!SR){
 function splitSentences(t){
   const m = t.replace(/\s+/g,' ').trim().match(/[^.!?]+[.!?]+["'”’)]*|[^.!?]+$/g);
   return (m || []).map(s => s.trim()).filter(s => /[a-z0-9]/i.test(s));
+}
+/* Whole-passage mode keeps the material as one item instead of one item per sentence */
+function segments(t){
+  if (!S.whole) return splitSentences(t);
+  const all = t.replace(/\s+/g,' ').trim();
+  return /[a-z0-9]/i.test(all) ? [all] : [];
 }
 const NUM = {'0':'zero','1':'one','2':'two','3':'three','4':'four','5':'five','6':'six','7':'seven','8':'eight','9':'nine','10':'ten','11':'eleven','12':'twelve','15':'fifteen','20':'twenty','30':'thirty','100':'hundred'};
 const CONTR = {"i'm":"i am","you're":"you are","we're":"we are","they're":"they are","it's":"it is","that's":"that is","there's":"there is","what's":"what is","he's":"he is","she's":"she is","i've":"i have","you've":"you have","we've":"we have","i'll":"i will","you'll":"you will","we'll":"we will","it'll":"it will","i'd":"i would","you'd":"you would","don't":"do not","doesn't":"does not","didn't":"did not","can't":"can not","cannot":"can not","won't":"will not","isn't":"is not","aren't":"are not","wasn't":"was not","weren't":"were not","haven't":"have not","hasn't":"has not","wouldn't":"would not","couldn't":"could not","shouldn't":"should not","let's":"let us","okay":"ok"};
@@ -333,12 +367,20 @@ function currentVoice(){
 function speak(text, rate, done){
   if (!window.speechSynthesis){ done && done(); return; }
   speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  const v = currentVoice(); if (v) u.voice = v;
-  u.lang = S.accent; u.rate = rate || S.rate;
+  // Long text is queued sentence by sentence: Chrome cuts off a single utterance after ~15 s.
+  // The queue plays back to back, so it still sounds like one continuous reading.
+  const parts = text.length > 200 ? splitSentences(text) : [text];
+  const v = currentVoice();
   let fired = false; const fin = () => { if (!fired){ fired = true; done && done(); } };
-  u.onend = fin; u.onerror = fin;
-  setTimeout(() => speechSynthesis.speak(u), 60);
+  const utts = parts.map((p, k) => {
+    const u = new SpeechSynthesisUtterance(p);
+    if (v) u.voice = v;
+    u.lang = S.accent; u.rate = rate || S.rate;
+    if (k === parts.length - 1){ u.onend = fin; u.onerror = fin; }
+    else u.onerror = e => { if (e.error !== 'interrupted' && e.error !== 'canceled') fin(); };
+    return u;
+  });
+  setTimeout(() => utts.forEach(u => speechSynthesis.speak(u)), 60);
 }
 
 /* ---------- speech recognition ---------- */
@@ -348,13 +390,15 @@ function speak(text, rate, done){
      heard correctly in ANY attempt (union of all attempts and all recognizer alternatives)
    - ends early when every word is correct, after SILENCE_MS of quiet once something was heard,
      or when the mic button is pressed again */
-const LISTEN_MS = 15000, SILENCE_MS = 3500;
+const LISTEN_BASE_MS = 15000, SILENCE_MS = 3500;
 function listen(i, done){
   if (!SR){ done && done(); return; }
   if (!(micStream && micStream.active)) openMic();
   stopRec();
   const sentence = S.sentences[i];
   const words = tokenize(sentence);
+  // 15 s for a sentence; a whole passage gets ~0.6 s per word plus slack (max 3 minutes)
+  const LISTEN_MS = Math.max(LISTEN_BASE_MS, Math.min(180000, words.length * 600 + 8000));
   const scored = words.map(w => w.parts.length > 0);
   const ses = { i, finals: [], interim: '', ok: scored.map(s => !s), err: null, closed: false,
                 start: Date.now(), lastHeard: 0, rec: null, tick: null };
@@ -377,7 +421,7 @@ function listen(i, done){
     const secs = document.createElement('span'); secs.className = 'secs'; secs.textContent = Math.ceil(left / 1000) + 's';
     const msg = document.createElement('span'); msg.className = 'live';
     const said = ses.finals.concat(ses.interim ? [ses.interim] : []).join(' / ');
-    msg.textContent = said || 'Speak now. You can repeat the sentence 2–3 times.';
+    msg.textContent = said || (S.whole ? 'Speak now. Read the whole passage; pausing is fine.' : 'Speak now. You can repeat the sentence 2–3 times.');
     res.append(bar, secs, msg);
     const live = ses.ok.slice();
     if (ses.interim){ const lr = evaluate(sentence, [{t: ses.interim}]); if (lr) lr.marks.forEach((m, k) => { if (m) live[k] = true; }); }
@@ -454,7 +498,7 @@ function loadDay(skipPull){
   const saved = store.get('day:' + S.date, null);
   S.sample = saved == null;
   S.text = saved == null ? SAMPLE : saved;
-  S.sentences = splitSentences(S.text);
+  S.sentences = segments(S.text);
   const r = store.get('res:' + S.date, {results:{}, tries:0});
   S.results = r.results || {}; S.tries = r.tries || 0;
   S.active = -1;
@@ -478,7 +522,7 @@ async function pullDay(day){
     rowToLocal(data);
     const saved = store.get('day:' + day, null);
     S.sample = saved == null; S.text = saved == null ? SAMPLE : saved;
-    S.sentences = splitSentences(S.text);
+    S.sentences = segments(S.text);
     S.results = data.results || {}; S.tries = data.tries || 0;
     renderAll();
   } else if (!data) queuePush(day);
@@ -512,10 +556,12 @@ async function onSignedIn(user){
     .filter((d, i, a) => a.indexOf(d) === i && !inCloud.has(d)).forEach(pushDay);
   syncMsg('Synced');
   loadDay();
+  refreshUsage();
 }
 function onSignedOut(){
   cloud.user = null;
   $('#authForm').hidden = false; $('#authOn').hidden = true;
+  refreshUsage();
 }
 function authMsg(t, err){ const el = $('#authMsg'); el.textContent = t; el.classList.toggle('err', !!err); }
 const ERR = {'Invalid login credentials':'Wrong email or password.','Email not confirmed':'Email not confirmed yet. Click the link in the confirmation email first.','User already registered':'This email already has an account. Just sign in.'};
@@ -697,8 +743,33 @@ const TTS_ERR = {
   sign_in_required: 'Sign in (Cloud sync above) to download MP3 files.',
   not_configured: 'The voice service is not set up yet. Add the Azure key in Supabase.',
   too_long: 'That text is too long for one request.',
-  azure_error: 'The voice service returned an error. Check the Azure key and region.'
+  azure_error: 'The voice service returned an error. Check the Azure key and region.',
+  quota_exceeded: 'This month’s free voice quota is used up. MP3 downloads resume on the 1st of next month.'
 };
+
+/* ---------- monthly voice usage vs. the Azure free tier ---------- */
+const FREE_LIMIT = 500000;
+const fmt = n => Number(n).toLocaleString('en-US');
+async function refreshUsage(){
+  const note = $('#usageNote'), pill = $('#usagePill');
+  if (!cloud.client || !cloud.user){
+    $('#usageUsed').textContent = '–'; $('#usageBar').style.width = '0%';
+    pill.textContent = '–'; pill.className = 'pill';
+    note.textContent = 'Sign in to see this month’s usage.';
+    return;
+  }
+  const { data, error } = await cloud.client.rpc('tts_usage_month');
+  if (error || !data || !data[0]){ note.textContent = 'Couldn’t load usage. Try again later.'; return; }
+  const u = data[0], limit = u.free_limit || FREE_LIMIT, pct = u.total / limit * 100;
+  $('#usageUsed').textContent = fmt(u.total);
+  $('#usageLimit').textContent = fmt(limit);
+  $('#usageBar').style.width = Math.min(100, pct) + '%';
+  const state = pct >= 100 ? ['bad', 'Limit reached'] : pct >= 80 ? ['warn', 'Near limit'] : ['good', 'Within free tier'];
+  pill.className = 'pill ' + state[0]; pill.textContent = state[1];
+  $('#usageBar').className = state[0];
+  const now = new Date(), reset = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  note.textContent = `${pct.toFixed(1)}% used · ${fmt(Math.max(0, limit - u.total))} left · you: ${fmt(u.mine)} · resets ${reset.toLocaleDateString('en-CA')}`;
+}
 async function ttsChunk(text){
   const { data } = await cloud.client.auth.getSession();
   const token = data && data.session && data.session.access_token;
@@ -731,10 +802,11 @@ async function downloadMp3(list, name, btn){
     const a = document.createElement('a'); a.href = url; a.download = name + '.mp3';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
-    dlMsg('Downloaded ' + name + '.mp3 (' + Math.round(blob.size / 1024) + ' KB)');
+    const used = parts.reduce((a, p) => a + p.length, 0);
+    dlMsg('Downloaded ' + name + '.mp3 (' + Math.round(blob.size / 1024) + ' KB, ' + fmt(used) + ' characters)');
   } catch(e){
     dlMsg(TTS_ERR[e.message] || ("Couldn't create the MP3 (" + e.message + '). Try again.'), true);
-  } finally { if (btn) btn.disabled = false; }
+  } finally { if (btn) btn.disabled = false; refreshUsage(); }
 }
 $('#dlAll').onclick = e => downloadMp3(S.sentences, fileBase(), e.currentTarget);
 $('#cloudVoice').value = store.get('cloudVoice', 'female');
@@ -769,7 +841,9 @@ $('#micBtn').onclick = openMic;
 /* ---------- wiring ---------- */
 $('#date').value = S.date;
 $('#date').onchange = e => { stopAll(); S.date = e.target.value || todayStr(); loadDay(); };
-$('#rate').value = S.rate; $('#rateOut').textContent = S.rate.toFixed(2) + '×';
+$('#whole').checked = S.whole;
+$('#whole').onchange = e => { stopAll(); S.whole = e.target.checked; store.set('whole', S.whole); loadDay(true); };
+$('#rate').value = S.rate;$('#rateOut').textContent = S.rate.toFixed(2) + '×';
 $('#rate').oninput = e => { S.rate = parseFloat(e.target.value); $('#rateOut').textContent = S.rate.toFixed(2) + '×'; store.set('rate', S.rate); };
 $('#voice').onchange = e => { S.voiceURI = e.target.value; store.set('voice', S.voiceURI); };
 $('#playAll').onclick = () => runAll(false);
