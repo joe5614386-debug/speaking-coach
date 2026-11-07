@@ -98,6 +98,10 @@ ol.sents{list-style:none;margin:0;padding:0;display:grid;gap:2px}
 .ibtn:disabled{opacity:.5;cursor:progress}
 .toggle{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);cursor:pointer;user-select:none}
 .toggle input{width:16px;height:16px;accent-color:var(--accent);margin:0}
+.toggle select{padding:4px 8px;font-size:13px}
+.enginerow{margin-top:-4px}
+.enginerow:has(#engineMsg:empty):has(#engineLoad[hidden]){display:none}
+.authmsg.ok{color:var(--good)}
 .dlrow{padding-top:12px;border-top:1px solid var(--line)}
 .ibtn.listening{background:var(--rec);border-color:var(--rec);color:#fff;animation:pulse 1.1s ease-in-out infinite}
 @keyframes pulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--rec) 25%,transparent)}}
@@ -191,11 +195,21 @@ aside{display:grid;gap:18px}
         <output id="rateOut"></output>
       </div>
       <label class="toggle" for="whole"><input type="checkbox" id="whole"> Read as one passage</label>
+      <label class="toggle" for="engine">Recognition
+        <select id="engine">
+          <option value="local">On-device (private, free)</option>
+          <option value="browser">Browser (Google / Microsoft)</option>
+        </select>
+      </label>
       <span class="spacer"></span>
       <button class="btn" id="micBtn" aria-live="polite"><span class="dot" id="micDot"></span><span id="micLabel">Turn on mic</span></button>
       <button class="btn" id="playAll"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg>Read all</button>
       <button class="btn primary" id="shadowAll"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5.5" y="1.5" width="5" height="8.5" rx="2.5"/><path d="M3 7.5a5 5 0 0 0 10 0M8 12.5V15"/></svg>Auto shadowing</button>
       <button class="btn" id="stop" hidden>Stop</button>
+    </div>
+    <div class="row enginerow">
+      <span class="authmsg" id="engineMsg"></span>
+      <button class="btn" id="engineLoad" type="button" hidden>Download model now</button>
     </div>
     <div class="row dlrow">
       <p class="label" style="margin:0">MP3 download</p>
@@ -255,7 +269,7 @@ aside{display:grid;gap:18px}
         <div class="bars" id="bars"></div>
         <div class="bar-x" id="barx"></div>
       </section>
-      <p class="foot">How scoring works: the browser's speech recognition listens, then the text is checked phrase by phrase. <b>Accuracy</b>: a phrase is green once you said it in order in any attempt, so restarting or correcting yourself is fine. Fillers (uh, um), repeated words and “I mean” are ignored. Yellow words were heard only in pieces (half credit); red words were missed. <b>Fluency</b> is scored separately and goes down with restarts, fillers, repeats and a slow pace. You get 15 seconds per sentence (longer for a whole passage); listening stops once every phrase is green, or after a few seconds of silence. It measures whether a listener would understand you, not individual sounds.</p>
+      <p class="foot">How scoring works: speech recognition listens (On-device: an open-source Whisper model running in this browser, so your voice never leaves your computer; Browser: Google’s or Microsoft’s online service), then the text is checked phrase by phrase. <b>Accuracy</b>: a phrase is green once you said it in order in any attempt, so restarting or correcting yourself is fine. Fillers (uh, um), repeated words and “I mean” are ignored. Yellow words were heard only in pieces (half credit); red words were missed. <b>Fluency</b> is scored separately and goes down with restarts, fillers, repeats and a slow pace. You get 15 seconds per sentence (longer for a whole passage); listening stops once every phrase is green, or after a few seconds of silence. It measures whether a listener would understand you, not individual sounds.</p>
     </aside>
   </div>
 </div>
@@ -288,6 +302,7 @@ const S = {
   date: todayStr(),
   accent: store.get('accent', 'en-US'),
   whole: store.get('whole', false),
+  engine: store.get('engine', 'local'),
   voiceURI: store.get('voice', ''),
   rate: store.get('rate', 0.95),
   text: '', sample: false, sentences: [], results: {}, tries: 0,
@@ -295,9 +310,173 @@ const S = {
 };
 
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (!SR){
-  const n = $('#srNotice'); n.hidden = false;
-  n.textContent = 'This browser has no speech recognition, so you can only listen. Open this page in Chrome or Microsoft Edge to get pronunciation feedback.';
+
+/* ---------- on-device speech recognition (open-source Whisper, runs in this browser) ----------
+   The model is downloaded once from Hugging Face and cached by the browser. Audio never leaves
+   this computer: it is captured at 16 kHz and transcribed in a Web Worker.
+   GPU (WebGPU): encoder fp32 + decoder q4, ~120 MB, ~1.5 s per sentence.
+   CPU (WASM):   8-bit quantized, ~41 MB, ~3–4 s per sentence. */
+const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js';
+const WHISPER_MODEL = 'onnx-community/whisper-tiny.en';
+const WORKER_SRC = `
+import { pipeline, env } from '${TRANSFORMERS_URL}';
+env.allowLocalModels = false;
+let asr = null;
+async function make(device){
+  const dtype = device === 'webgpu' ? { encoder_model: 'fp32', decoder_model_merged: 'q4' } : 'q8';
+  return pipeline('automatic-speech-recognition', '${WHISPER_MODEL}', {
+    device, dtype, progress_callback: p => postMessage({ type: 'progress', p })
+  });
+}
+onmessage = async (e) => {
+  const m = e.data;
+  if (m.type === 'load'){
+    let device = m.device;
+    if (device === 'auto') device = (self.navigator && navigator.gpu && await navigator.gpu.requestAdapter().catch(() => null)) ? 'webgpu' : 'wasm';
+    try { asr = await make(device); }
+    catch (err){
+      if (device !== 'webgpu'){ postMessage({ type: 'error', error: String(err && err.message || err) }); return; }
+      try { device = 'wasm'; asr = await make(device); }
+      catch (err2){ postMessage({ type: 'error', error: String(err2 && err2.message || err2) }); return; }
+    }
+    postMessage({ type: 'ready', device });
+  } else if (m.type === 'run'){
+    try { const out = await asr(m.audio); postMessage({ type: 'result', id: m.id, text: out.text || '' }); }
+    catch (err){ postMessage({ type: 'result', id: m.id, error: String(err && err.message || err) }); }
+  }
+};`;
+const Local = {
+  worker: null, ready: false, device: '', loading: null, pending: new Map(), seq: 0, chain: Promise.resolve(),
+  files: {}, onProgress: null,
+  ensure(onProgress){
+    if (onProgress) this.onProgress = onProgress;
+    if (this.ready) return Promise.resolve();
+    if (this.loading) return this.loading;
+    this.loading = new Promise((resolve, reject) => {
+      let w;
+      try { w = new Worker(URL.createObjectURL(new Blob([WORKER_SRC], { type: 'text/javascript' })), { type: 'module' }); }
+      catch (e){ this.loading = null; reject(new Error('This browser cannot run the on-device model')); return; }
+      this.worker = w;
+      w.onmessage = (e) => {
+        const m = e.data;
+        if (m.type === 'progress'){
+          const p = m.p || {};
+          if (p.file && p.total){ this.files[p.file] = { loaded: p.loaded || 0, total: p.total }; }
+          if (p.file && p.status === 'done' && this.files[p.file]) this.files[p.file].loaded = this.files[p.file].total;
+          const f = Object.values(this.files), tot = f.reduce((a, x) => a + x.total, 0), got = f.reduce((a, x) => a + x.loaded, 0);
+          const pct = tot ? Math.min(99, Math.round(got / tot * 100)) : 0;
+          engineStatus(`Downloading model… ${pct}% (${Math.round(got / 1e6)} / ${Math.round(tot / 1e6)} MB)`);
+          this.onProgress && this.onProgress(pct, tot);
+        } else if (m.type === 'ready'){
+          this.ready = true; this.device = m.device;
+          engineStatus(m.device === 'webgpu' ? 'Model ready · GPU · audio stays on this computer' : 'Model ready · CPU · audio stays on this computer', 'good');
+          store.set('localModelCached', true);
+          resolve();
+        } else if (m.type === 'error'){
+          this.loading = null; engineStatus('Model failed to load: ' + m.error, 'err'); reject(new Error(m.error));
+        } else if (m.type === 'result'){
+          const cb = this.pending.get(m.id); this.pending.delete(m.id);
+          if (cb) m.error ? cb.reject(new Error(m.error)) : cb.resolve(m.text);
+        }
+      };
+      w.onerror = (e) => { this.loading = null; engineStatus('Model failed to load. Try Browser recognition.', 'err'); reject(new Error(e.message || 'worker error')); };
+      engineStatus('Preparing the speech model…');
+      w.postMessage({ type: 'load', device: store.get('localDevice', 'auto') });
+    });
+    return this.loading;
+  },
+  // one transcription at a time, in order
+  run(audio){
+    const job = this.chain.then(() => new Promise((resolve, reject) => {
+      const id = ++this.seq; this.pending.set(id, { resolve, reject });
+      this.worker.postMessage({ type: 'run', id, audio }, [audio.buffer]);
+    }));
+    this.chain = job.catch(() => {});
+    return job;
+  }
+};
+function engineStatus(text, kind){
+  const el = $('#engineMsg'); if (!el) return;
+  el.textContent = text; el.classList.toggle('err', kind === 'err'); el.classList.toggle('ok', kind === 'good');
+}
+// Whisper sometimes "hears" captions in silence or noise; ignore those
+const isNoise = t => !t || !/[a-z]/i.test(t) || /^\s*[\[(*♪].*[\])*♪]\s*$/.test(t) || /^\s*(thank you\.?|thanks for watching!?|you)\s*$/i.test(t);
+
+/* A recognizer with the same interface as the browser's SpeechRecognition, backed by Local.
+   Partial results are refreshed while you speak; a final result is made after a short pause. */
+class LocalRec {
+  constructor(){ this.results = []; this.chunks = []; this.len = 0; this.voiced = 0; this.lastVoice = 0; this.segVoice = false;
+                 this.lastRunLen = 0; this.busy = false; this.stopped = false; this.seg = 0; this.floor = 0.008; this.calib = []; }
+  async start(){
+    try {
+      await Local.ensure();
+      if (!(micStream && micStream.active)) await openMic();
+      if (!(micStream && micStream.active)) throw Object.assign(new Error('mic'), { code: 'not-allowed' });
+      if (this.stopped) return;
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      const src = this.ctx.createMediaStreamSource(micStream);
+      const proc = this.ctx.createScriptProcessor(4096, 1, 1);
+      const mute = this.ctx.createGain(); mute.gain.value = 0;
+      src.connect(proc); proc.connect(mute); mute.connect(this.ctx.destination);
+      proc.onaudioprocess = e => this.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+      this.nodes = [src, proc, mute];
+      this.timer = setInterval(() => this.tick(), 250);
+    } catch (e){
+      this.onerror && this.onerror({ error: e.code === 'not-allowed' ? 'not-allowed' : 'audio-capture' });
+      this.onend && this.onend();
+    }
+  }
+  push(chunk){
+    if (this.stopped) return;
+    let s = 0; for (let k = 0; k < chunk.length; k++) s += chunk[k] * chunk[k];
+    const rms = Math.sqrt(s / chunk.length);
+    if (this.calib.length < 4){ this.calib.push(rms); this.floor = Math.max(0.008, Math.min(0.03, Math.min(...this.calib) * 3)); }
+    const loud = rms > this.floor;
+    if (loud){ this.lastVoice = performance.now(); this.segVoice = true; this.voiced += chunk.length; }
+    if (this.segVoice || loud){ this.chunks.push(chunk); this.len += chunk.length; }
+    else { this.chunks = [chunk]; this.len = chunk.length; }   // keep a little lead-in before speech
+  }
+  audio(){ const a = new Float32Array(this.len); let o = 0; for (const c of this.chunks){ a.set(c, o); o += c.length; } return a; }
+  tick(){
+    if (this.stopped || !this.segVoice) return;
+    const quiet = performance.now() - this.lastVoice;
+    if (quiet > 1100 || this.len > 16000 * 25){ this.finalize(); return; }
+    if (!this.busy && this.len - this.lastRunLen > 16000 * 0.7){
+      this.busy = true; this.lastRunLen = this.len; const seg = this.seg;
+      Local.run(this.audio()).then(t => { if (!this.stopped && seg === this.seg && !isNoise(t)) this.emit(t.trim(), false); })
+        .catch(() => {}).finally(() => { this.busy = false; });
+    }
+  }
+  finalize(){
+    const voiced = this.voiced, a = this.audio(), seg = this.seg;
+    this.seg++; this.chunks = []; this.len = 0; this.voiced = 0; this.segVoice = false; this.lastRunLen = 0;
+    if (voiced < 16000 * 0.25) return;                       // a click or cough, not speech
+    this.finalPending = (this.finalPending || 0) + 1;
+    Local.run(a).then(t => { if (!this.stopped) this.emit(isNoise(t) ? '' : t.trim(), true, seg); })
+      .catch(() => { if (!this.stopped) this.emit('', true, seg); })
+      .finally(() => { this.finalPending--; });
+  }
+  emit(text, final){
+    const r = [{ transcript: text, confidence: 0.9 }]; r.isFinal = final;
+    const last = this.results[this.results.length - 1];
+    if (last && !last.isFinal) this.results[this.results.length - 1] = r; else this.results.push(r);
+    if (final && !text) this.results.pop();                 // nothing usable: drop the placeholder
+    this.onresult && this.onresult({ resultIndex: Math.max(0, this.results.length - 1), results: this.results });
+  }
+  abort(){
+    this.stopped = true; clearInterval(this.timer);
+    try { this.nodes && this.nodes.forEach(n => n.disconnect()); } catch(e){}
+    try { this.ctx && this.ctx.close(); } catch(e){}
+  }
+  stop(){ this.abort(); }
+}
+
+function updateSrNotice(){
+  const n = $('#srNotice');
+  if (S.engine === 'browser' && !SR){
+    n.hidden = false;
+    n.textContent = 'This browser has no built-in speech recognition. Set Recognition to “On-device” to practice here, or open the page in Chrome or Edge.';
+  } else n.hidden = true;
 }
 
 /* ---------- text processing ---------- */
@@ -489,7 +668,16 @@ function speak(text, rate, done){
      or when the mic button is pressed again */
 const LISTEN_BASE_MS = 15000, SILENCE_MS = 3500;
 function listen(i, done){
-  if (!SR){ done && done(); return; }
+  const useLocal = S.engine === 'local';
+  if (!useLocal && !SR){ done && done(); return; }
+  if (useLocal && !Local.ready){
+    setListening(i, true);
+    showLive(i, 'Downloading the speech model (one time only)…');
+    Local.ensure(pct => showLive(i, `Downloading the speech model (one time only)… ${pct}%`))
+      .then(() => { setListening(i, false); listen(i, done); })
+      .catch(err => { setListening(i, false); showMsg(i, 'Couldn’t load the on-device model. Set Recognition to “Browser” and try again.'); done && done(false); });
+    return;
+  }
   if (!(micStream && micStream.active)) openMic();
   stopRec();
   const sentence = S.sentences[i];
@@ -569,7 +757,7 @@ function listen(i, done){
   };
   ses.finish = finish;
   const startRec = () => {
-    const rec = new SR(); ses.rec = rec; S.rec = rec;
+    const rec = useLocal ? new LocalRec() : new SR(); ses.rec = rec; S.rec = rec;
     rec.lang = S.accent; rec.interimResults = true; rec.maxAlternatives = 5; rec.continuous = true;
     rec.onresult = e => {
       let interim = '';
@@ -853,7 +1041,7 @@ function runAll(shadow){
     setActive(i);
     speak(S.sentences[i], S.rate, () => {
       if (!S.running) return;
-      if (shadow && SR) listen(i, () => setTimeout(() => step(i + 1), 900));
+      if (shadow && (SR || S.engine === 'local')) listen(i, () => setTimeout(() => step(i + 1), 900));
       else setTimeout(() => step(i + 1), 450);
     });
   };
@@ -976,6 +1164,32 @@ $('#micBtn').onclick = openMic;
 /* ---------- wiring ---------- */
 $('#date').value = S.date;
 $('#date').onchange = e => { stopAll(); S.date = e.target.value || todayStr(); loadDay(); };
+function engineIdle(){
+  if (S.engine !== 'local'){ engineStatus(SR ? 'Audio is sent to the browser’s speech service (Google or Microsoft).' : ''); $('#engineLoad').hidden = true; return; }
+  if (Local.ready) return;
+  if (Local.loading){ $('#engineLoad').hidden = true; return; }
+  if (store.get('localModelCached', false)){ engineStatus('On-device model will load when you start (already downloaded).'); $('#engineLoad').hidden = true; }
+  else { engineStatus('On-device: a one-time download of about 40–120 MB. Audio never leaves this computer.'); $('#engineLoad').hidden = false; }
+}
+$('#engine').value = S.engine;
+$('#engine').onchange = e => { stopAll(); S.engine = e.target.value; store.set('engine', S.engine); updateSrNotice(); engineIdle(); };
+$('#engineLoad').onclick = () => { $('#engineLoad').hidden = true; Local.ensure().catch(() => { $('#engineLoad').hidden = false; }); };
+updateSrNotice(); engineIdle();
+if (S.engine === 'local' && store.get('localModelCached', false)) Local.ensure().catch(() => {});   // loads from the browser cache
+// Self-test (open the page with #selftest): transcribe a public sample recording on this computer
+if (location.hash === '#selftest'){
+  (async () => {
+    try {
+      await Local.ensure();
+      engineStatus('Self-test: transcribing a sample recording…');
+      const buf = await fetch('https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/jfk.wav').then(r => r.arrayBuffer());
+      const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      const audio = (await ctx.decodeAudioData(buf)).getChannelData(0).slice(); ctx.close();
+      const t0 = performance.now(); const text = await Local.run(audio);
+      engineStatus(`Self-test OK (${Local.device}, ${((performance.now() - t0) / 1000).toFixed(1)} s): “${text.trim()}”`, 'good');
+    } catch (e){ engineStatus('Self-test failed: ' + e.message, 'err'); }
+  })();
+}
 $('#whole').checked = S.whole;
 $('#whole').onchange = e => { stopAll(); S.whole = e.target.checked; store.set('whole', S.whole); loadDay(true); };
 $('#rate').value = S.rate;$('#rateOut').textContent = S.rate.toFixed(2) + '×';
