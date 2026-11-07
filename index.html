@@ -89,6 +89,8 @@ ol.sents{list-style:none;margin:0;padding:0;display:grid;gap:2px}
 .w:hover{background:var(--sunk);text-decoration:underline dotted}
 .w.ok,.w.live-ok{color:var(--good);background:var(--good-bg);box-shadow:inset 0 -2px 0 var(--good);font-weight:600}
 .w.live-ok{transition:background .2s,color .2s}
+.w.part,.w.live-part{color:var(--warn);background:var(--warn-bg);text-decoration:underline dotted var(--warn) 2px;text-underline-offset:4px}
+.flu{font-size:12.5px;color:var(--muted)}
 .w.miss{color:var(--bad);background:var(--bad-bg);text-decoration:underline wavy var(--bad) 1px;text-underline-offset:4px}
 .acts{display:flex;gap:6px;align-items:flex-start}
 .ibtn{width:36px;height:36px;border-radius:999px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center}
@@ -253,7 +255,7 @@ aside{display:grid;gap:18px}
         <div class="bars" id="bars"></div>
         <div class="bar-x" id="barx"></div>
       </section>
-      <p class="foot">How scoring works: the browser's speech recognition listens to you, then compares what it heard with the text word by word. Green words were recognized correctly; red wavy underlines mark words that were missed or misheard. You get up to 15 seconds per sentence and can repeat it 2–3 times; a word counts as correct if any attempt got it right. Listening stops early once every word is correct, or after a few seconds of silence. It measures whether a native listener would understand you, not individual sounds. Try the same sentence with a different accent selected above.</p>
+      <p class="foot">How scoring works: the browser's speech recognition listens, then the text is checked phrase by phrase. <b>Accuracy</b>: a phrase is green once you said it in order in any attempt, so restarting or correcting yourself is fine. Fillers (uh, um), repeated words and “I mean” are ignored. Yellow words were heard only in pieces (half credit); red words were missed. <b>Fluency</b> is scored separately and goes down with restarts, fillers, repeats and a slow pace. You get 15 seconds per sentence (longer for a whole passage); listening stops once every phrase is green, or after a few seconds of silence. It measures whether a listener would understand you, not individual sounds.</p>
     </aside>
   </div>
 </div>
@@ -333,6 +335,101 @@ function lcsFlags(a, b){
 function tokenize(sentence){
   return sentence.split(/\s+/).filter(Boolean).map(raw => ({raw, parts: normParts(raw)}));
 }
+
+/* ---------- learner-friendly scoring ----------
+   1. Clean what was heard: drop fillers (uh, um…), repair phrases (I mean, sorry…) and
+      immediate repeats ("I I want", "to the to the"), unless the target text itself has them.
+   2. Score by phrase: the sentence is cut into short phrases; a phrase counts once it was said
+      in order, in one go, in ANY attempt. Pauses, restarts and corrections between phrases are fine.
+      Words heard only in scattered pieces get half credit (yellow), so the score can't be
+      assembled from random words.
+   3. Fluency is reported separately: restarts, fillers/repeats and slowness lower it, accuracy stays. */
+const FILLERS = new Set(['uh','um','umm','uhm','er','erm','ah','eh','hmm','hm','mm','mhm']);
+const REPAIRS = [['i','mean'],['i','am','sorry'],['sorry'],['oops'],['no','wait'],['wait']];
+const BREAK_BEFORE = new Set(['and','but','or','so','because','to','in','on','at','for','with','of','from','about','into','when','while','if','that','which','who','after','before','than','by','until','since']);
+function targetInfo(sentence){
+  const words = tokenize(sentence);
+  const flat = words.flatMap(w => w.parts);
+  return { words, flat, set: new Set(flat), str: ' ' + flat.join(' ') + ' ', chunks: makeChunks(words) };
+}
+function cleanTokens(text, T){
+  const stats = { fillers: 0, repeats: 0, repairs: 0 };
+  const raw = (text || '').split(/\s+/).flatMap(normParts);
+  const noFill = raw.filter(w => { if (FILLERS.has(w) && !T.set.has(w)){ stats.fillers++; return false; } return true; });
+  const out = [];
+  for (let k = 0; k < noFill.length; k++){
+    const hit = REPAIRS.find(m => m.every((x, j) => noFill[k + j] === x) && !T.str.includes(' ' + m.join(' ') + ' '));
+    if (hit){ stats.repairs++; k += hit.length - 1; continue; }
+    out.push(noFill[k]);
+  }
+  let toks = out, changed = true;
+  while (changed){
+    changed = false;
+    for (let n = 3; n >= 1 && !changed; n--){
+      for (let k = 0; k + 2 * n <= toks.length; k++){
+        let same = true;
+        for (let j = 0; j < n; j++) if (toks[k + j] !== toks[k + n + j]){ same = false; break; }
+        if (!same) continue;
+        const seq = toks.slice(k, k + n).join(' ');
+        if (T.str.includes(' ' + seq + ' ' + seq + ' ')) continue;   // the text really repeats it
+        toks = toks.slice(0, k + n).concat(toks.slice(k + 2 * n)); stats.repeats++; changed = true; break;
+      }
+    }
+  }
+  return { tokens: toks, stats };
+}
+const DETERMINERS = new Set(['a','an','the','my','your','his','her','its','our','their','this','these','those','some','any','every','each','no']);
+function makeChunks(words){
+  const chunks = []; let cur = [];
+  words.forEach((w, i) => {
+    if (!w.parts.length) return;
+    if (cur.length >= 2 && (BREAK_BEFORE.has(w.parts[0]) || cur.length >= 4)){
+      // keep "my grandparents", "the weekend" together: a phrase never ends on a determiner
+      const carry = [];
+      while (cur.length > 1 && DETERMINERS.has(words[cur[cur.length - 1]].parts.slice(-1)[0])) carry.unshift(cur.pop());
+      chunks.push(cur); cur = carry;
+    }
+    cur.push(i);
+    if (/[,;:]["'”’)]*$/.test(w.raw)){ chunks.push(cur); cur = []; }
+  });
+  if (cur.length) chunks.push(cur);
+  for (let k = chunks.length - 1; k > 0; k--) if (chunks[k].length === 1){ chunks[k - 1] = chunks[k - 1].concat(chunks[k]); chunks.splice(k, 1); }
+  if (chunks.length > 1 && chunks[0].length === 1){ chunks[1] = chunks[0].concat(chunks[1]); chunks.shift(); }
+  return chunks;
+}
+// the phrase's words appear in order, in one stretch (one stray word inside is tolerated)
+function chunkFound(seq, toks){
+  for (let s = 0; s < toks.length; s++){
+    if (toks[s] !== seq[0]) continue;
+    let j = 1, k = s + 1, extra = 0;
+    while (j < seq.length && k < toks.length){
+      if (toks[k] === seq[j]){ j++; k++; } else { if (++extra > 1) break; k++; }
+    }
+    if (j === seq.length) return true;
+  }
+  return false;
+}
+function chunkHits(T, text){
+  const { tokens } = cleanTokens(text, T);
+  return T.chunks.map(c => chunkFound(c.flatMap(i => T.words[i].parts), tokens));
+}
+function fluencyOf(T, joined, elapsedMs){
+  const { tokens, stats } = cleanTokens(joined, T);
+  // a restart = going back to a phrase already reached (each jump back counts once)
+  const heads = [];
+  T.chunks.forEach((c, ci) => {
+    const head = c.flatMap(i => T.words[i].parts).slice(0, 2);
+    for (let k = 0; k + head.length <= tokens.length; k++) if (head.every((x, j) => tokens[k + j] === x)) heads.push({ k, ci });
+  });
+  heads.sort((a, b) => a.k - b.k);
+  let restarts = 0, reached = -1;
+  for (const h of heads){ if (h.ci <= reached) restarts++; reached = h.ci; }
+  const expected = T.flat.length * 550 + 2000;          // relaxed learner pace (~110 words/min)
+  const slow = elapsedMs > expected ? Math.min(25, Math.round((elapsedMs - expected) / expected * 25)) : 0;
+  const disfl = stats.fillers + stats.repeats + stats.repairs;
+  const score = Math.max(0, Math.min(100, 100 - 15 * restarts - 5 * disfl - slow));
+  return { score, restarts, fillers: stats.fillers, repeats: stats.repeats, repairs: stats.repairs, slow: slow > 0 };
+}
 function evaluate(sentence, alts){
   const words = tokenize(sentence);
   const flat = [], owner = [];
@@ -386,9 +483,9 @@ function speak(text, rate, done){
 /* ---------- speech recognition ---------- */
 /* One listening session per sentence:
    - stays open up to LISTEN_MS, restarting the recognizer if the browser cuts it off after a pause
-   - the speaker may repeat the sentence several times; a word counts as correct if it was
-     heard correctly in ANY attempt (union of all attempts and all recognizer alternatives)
-   - ends early when every word is correct, after SILENCE_MS of quiet once something was heard,
+   - the speaker may repeat or correct themselves; a phrase counts once it was said correctly
+     in ANY attempt (all attempts and all recognizer alternatives are checked)
+   - ends early when every phrase is correct, after SILENCE_MS of quiet once something was heard,
      or when the mic button is pressed again */
 const LISTEN_BASE_MS = 15000, SILENCE_MS = 3500;
 function listen(i, done){
@@ -400,16 +497,24 @@ function listen(i, done){
   // 15 s for a sentence; a whole passage gets ~0.6 s per word plus slack (max 3 minutes)
   const LISTEN_MS = Math.max(LISTEN_BASE_MS, Math.min(180000, words.length * 600 + 8000));
   const scored = words.map(w => w.parts.length > 0);
-  const ses = { i, finals: [], interim: '', ok: scored.map(s => !s), err: null, closed: false,
-                start: Date.now(), lastHeard: 0, rec: null, tick: null };
+  const T = targetInfo(sentence);
+  const ses = { i, finals: [], interim: '', ok: scored.map(s => !s), chunkOk: T.chunks.map(() => false),
+                err: null, closed: false, start: Date.now(), lastHeard: 0, doneAt: 0, rec: null, tick: null };
   S.session = ses;
-  const allOk = () => ses.ok.every(Boolean);
+  const allOk = () => ses.chunkOk.every(Boolean);
   const absorb = alts => {
     for (const a of alts){
       if (!a.t || !a.t.trim()) continue;
-      const r = evaluate(sentence, [a]);
+      const r = evaluate(sentence, [a]);                       // scattered words (half credit)
       if (r) r.marks.forEach((m, k) => { if (m && scored[k]) ses.ok[k] = true; });
+      chunkHits(T, a.t).forEach((h, c) => { if (h) ses.chunkOk[c] = true; });   // whole phrases
     }
+    if (!ses.doneAt && allOk()) ses.doneAt = Date.now();
+  };
+  const greenMarks = (chunkOk) => {
+    const g = words.map(() => false);
+    T.chunks.forEach((c, k) => { if (chunkOk[k]) c.forEach(i => { g[i] = true; }); });
+    return g;
   };
   const view = () => {
     const left = Math.max(0, LISTEN_MS - (Date.now() - ses.start));
@@ -423,9 +528,13 @@ function listen(i, done){
     const said = ses.finals.concat(ses.interim ? [ses.interim] : []).join(' / ');
     msg.textContent = said || (S.whole ? 'Speak now. Read the whole passage; pausing is fine.' : 'Speak now. You can repeat the sentence 2–3 times.');
     res.append(bar, secs, msg);
-    const live = ses.ok.slice();
-    if (ses.interim){ const lr = evaluate(sentence, [{t: ses.interim}]); if (lr) lr.marks.forEach((m, k) => { if (m) live[k] = true; }); }
-    applyLive(i, live);
+    const liveChunks = ses.chunkOk.slice(), part = ses.ok.slice();
+    if (ses.interim){
+      chunkHits(T, ses.finals.concat([ses.interim]).join(' ')).forEach((h, c) => { if (h) liveChunks[c] = true; });
+      chunkHits(T, ses.interim).forEach((h, c) => { if (h) liveChunks[c] = true; });
+      const lr = evaluate(sentence, [{t: ses.interim}]); if (lr) lr.marks.forEach((m, k) => { if (m) part[k] = true; });
+    }
+    applyLive(i, greenMarks(liveChunks), part);
   };
   const finish = () => {
     if (ses.closed) return;
@@ -441,10 +550,17 @@ function listen(i, done){
     } else if (!heardAny){
       showMsg(i, ses.err === 'network' ? "Can't reach the speech service. Check your internet connection." : "Didn't hear anything. Move closer to the mic and try again.");
     } else {
+      const joined = ses.finals.filter(Boolean).join(' ');
+      absorb([{t: joined}]);                                   // a phrase split across a pause still counts
+      const green = greenMarks(ses.chunkOk);
+      const partial = words.map((w, k) => scored[k] && !green[k] && ses.ok[k]);
       const total = scored.filter(Boolean).length || 1;
-      const good = ses.ok.filter((m, k) => m && scored[k]).length;
-      const r = { score: Math.round(good / total * 100), heard: ses.finals.filter(Boolean).join(' / '),
-                  marks: ses.ok.slice(), missed: words.filter((w, k) => scored[k] && !ses.ok[k]).map(w => w.parts.join(' ')),
+      const credit = words.reduce((a, w, k) => a + (!scored[k] ? 0 : green[k] ? 1 : partial[k] ? 0.5 : 0), 0);
+      const flu = fluencyOf(T, joined, (ses.doneAt || Date.now()) - ses.start);
+      const r = { score: Math.round(credit / total * 100), fluency: flu.score, flu,
+                  heard: ses.finals.filter(Boolean).join(' / '),
+                  marks: green, partial,
+                  missed: words.filter((w, k) => scored[k] && !green[k]).map(w => w.parts.join(' ')),
                   attempts: ses.finals.length, at: Date.now() };
       S.results[sentence] = r; S.tries++; saveResults();
       renderSentence(i); renderSummary();
@@ -463,7 +579,7 @@ function listen(i, done){
           const alts = Array.from(r).map(a => ({t: a.transcript, c: a.confidence}));
           ses.finals.push((alts[0] && alts[0].t || '').trim());
           absorb(alts);
-          absorb([{t: ses.finals.join(' ')}]);   // a sentence split across two pauses still counts
+          absorb([{t: ses.finals.join(' ')}]);   // a phrase split across two pauses still counts
         } else interim += r[0].transcript;
       }
       ses.interim = interim.trim(); ses.lastHeard = Date.now();
@@ -628,7 +744,7 @@ function renderSentence(i){
   const text = li.querySelector('.text'); text.innerHTML = '';
   words.forEach((w, k) => {
     const span = document.createElement('span');
-    span.className = 'w' + (r && w.parts.length ? (r.marks[k] ? ' ok' : ' miss') : '');
+    span.className = 'w' + (r && w.parts.length ? (r.marks[k] ? ' ok' : (r.partial && r.partial[k]) ? ' part' : ' miss') : '');
     span.textContent = w.raw;
     span.title = 'Click to hear this word';
     span.onclick = () => speak(w.raw.replace(/[^A-Za-z0-9'’\-]/g,''), 0.7);
@@ -636,10 +752,27 @@ function renderSentence(i){
   });
   const res = li.querySelector('.result'); res.innerHTML = '';
   if (r){
-    const sc = document.createElement('span'); sc.className = 'score ' + scoreClass(r.score); sc.textContent = r.score + ' pts';
+    const sc = document.createElement('span'); sc.className = 'score ' + scoreClass(r.score);
+    sc.textContent = (r.fluency != null ? 'Accuracy ' : '') + r.score + (r.fluency != null ? '' : ' pts');
+    sc.title = 'Accuracy: phrases you got right in any attempt. Self-corrections count.';
+    res.append(sc);
+    if (r.fluency != null){
+      const fl = document.createElement('span'); fl.className = 'score ' + scoreClass(r.fluency);
+      fl.textContent = 'Fluency ' + r.fluency;
+      fl.title = 'Fluency: lowered by restarts, fillers (uh, um), repeated words and slow pace.';
+      const f = r.flu || {}, bits = [];
+      const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+      if (f.restarts) bits.push(plural(f.restarts, 'restart'));
+      if (f.fillers) bits.push(plural(f.fillers, 'filler'));
+      if (f.repeats) bits.push(plural(f.repeats, 'repeat'));
+      if (f.repairs) bits.push(plural(f.repairs, 'self-correction'));
+      if (f.slow) bits.push('slow pace');
+      const d = document.createElement('span'); d.className = 'flu'; d.textContent = bits.length ? bits.join(' · ') : 'smooth';
+      res.append(fl, d);
+    }
     const lab = document.createElement('span'); lab.textContent = 'Heard:';
     const h = document.createElement('span'); h.className = 'heard'; h.textContent = '“' + r.heard + '”';
-    res.append(sc, lab, h);
+    res.append(lab, h);
   }
   li.classList.toggle('active', i === S.active);
 }
@@ -668,12 +801,14 @@ function setActive(i){
 function setListening(i, on){ const b = document.querySelector(`.sent[data-i="${i}"] .mic`); b && b.classList.toggle('listening', on); }
 function showLive(i, t){ const r = document.querySelector(`.sent[data-i="${i}"] .result`); if (r){ r.innerHTML = ''; const s = document.createElement('span'); s.className = 'live'; s.textContent = t; r.appendChild(s); } }
 function showMsg(i, t){ showLive(i, t); }
-function applyLive(i, marks){
+function applyLive(i, marks, partial){
   const spans = document.querySelectorAll(`.sent[data-i="${i}"] .text .w`);
   const words = tokenize(S.sentences[i]);
   spans.forEach((sp, k) => {
-    sp.classList.remove('ok', 'miss');
-    sp.classList.toggle('live-ok', !!(marks[k] && words[k] && words[k].parts.length));
+    const real = !!(words[k] && words[k].parts.length);
+    sp.classList.remove('ok', 'miss', 'part');
+    sp.classList.toggle('live-ok', real && !!marks[k]);
+    sp.classList.toggle('live-part', real && !marks[k] && !!(partial && partial[k]));
   });
 }
 function renderSummary(){
