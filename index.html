@@ -33,6 +33,7 @@
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);padding:0 16px}
 .wrap{max-width:1120px;margin:0 auto;padding-block:20px 48px;display:grid;gap:18px}
+.wrap>*{min-width:0}
 button,select,input,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -54,6 +55,8 @@ h1{font-family:var(--f-display);font-weight:700;font-size:clamp(26px,4vw,36px);l
 .chip[aria-pressed="true"] small{color:inherit;opacity:.8}
 .chip:disabled{opacity:.45;cursor:not-allowed}
 .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.row>*{min-width:0;max-width:100%}
+#voice{width:100%;max-width:340px}
 .row > *{min-width:0}
 select{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;max-width:100%}
 .rate{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
@@ -65,7 +68,7 @@ select{background:var(--surface);border:1px solid var(--line);border-radius:8px;
 .spacer{flex:1}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
 .account input{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-width:0;flex:1 1 170px;max-width:260px}
-.authmsg{font-size:13px;color:var(--muted)}
+.authmsg{font-size:13px;color:var(--muted);min-width:0;overflow-wrap:anywhere}
 .authmsg.err{color:var(--bad)}
 .dot.on{background:var(--good)}
 #micBtn.on{border-color:var(--good);color:var(--good);background:var(--good-bg)}
@@ -138,8 +141,28 @@ aside{display:grid;gap:18px}
 .usage-foot{margin:0;font-size:12px;color:var(--muted);line-height:1.5}
 .stat .v{font-family:var(--f-mono);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
 .stat .k{font-size:12px;color:var(--muted)}
-.review{display:flex;flex-wrap:wrap;gap:6px}
-.review button{border:1px solid var(--line);background:var(--bad-bg);color:var(--bad);border-radius:6px;padding:2px 8px;font-family:var(--f-read);font-size:15px}
+.wl-head{display:flex;flex-wrap:wrap;gap:10px 16px;justify-content:space-between;align-items:flex-end;margin-bottom:12px}
+.wl-sub{margin:4px 0 0;font-size:13px;color:var(--muted)}
+.wl-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.wl-tools .chips{display:flex;gap:6px}
+.wl-count{font-family:var(--f-mono);letter-spacing:0;margin-left:6px}
+#wordlist{min-width:0}
+.wl-wrap{overflow-x:auto;max-width:100%;border:1px solid var(--line);border-radius:10px}
+table.wl{width:100%;min-width:520px;border-collapse:collapse;font-size:14px}
+.wl th{text-align:left;font-size:12px;letter-spacing:.06em;color:var(--muted);font-weight:500;background:var(--sunk);padding:8px 12px;border-bottom:1px solid var(--line)}
+.wl th:nth-child(1){width:22%}
+.wl th:nth-child(2){width:20%}
+.wl td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.wl tbody tr:last-child td{border-bottom:0}
+.wl-word{border:0;background:none;padding:0;color:var(--bad);font-family:var(--f-read);font-size:16px;font-weight:600;text-align:left}
+.wl-word:hover{text-decoration:underline}
+.wl-n{margin-left:6px;font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.wl-ipa{font-family:"Charis SIL","Doulos SIL","Segoe UI","Lucida Sans Unicode",sans-serif;font-size:15px}
+.wl-mean div+div{margin-top:4px}
+.wl-mean i{color:var(--muted);margin-right:6px}
+.wl .pending{color:var(--muted)}
+.wl-foot{margin:10px 0 0;font-size:12px;color:var(--muted)}
+@media (max-width:560px){table.wl{min-width:0;font-size:13.5px}.wl th,.wl td{padding:8px}.wl th:nth-child(1){width:30%}.wl th:nth-child(2){width:26%}.wl-ipa{overflow-wrap:anywhere}}
 .empty{color:var(--muted);font-size:13px;margin:0}
 .bars{display:grid;grid-template-columns:repeat(14,1fr);gap:4px;align-items:end;height:90px}
 .bar{background:var(--accent);border-radius:3px 3px 0 0;min-height:2px;opacity:.85}
@@ -261,10 +284,6 @@ aside{display:grid;gap:18px}
         <p class="usage-foot">Azure free tier (F0): 500,000 characters per month, shared by everyone who downloads. Playing audio in the browser is free and not counted.</p>
       </section>
       <section class="panel">
-        <p class="label">Words to review (click to hear slowly)</p>
-        <div class="review" id="review"></div>
-      </section>
-      <section class="panel">
         <p class="label">Daily average, last 14 days</p>
         <div class="bars" id="bars"></div>
         <div class="bar-x" id="barx"></div>
@@ -272,6 +291,29 @@ aside{display:grid;gap:18px}
       <p class="foot">How scoring works: speech recognition listens (On-device: an open-source Whisper model running in this browser, so your voice never leaves your computer; Browser: Google’s or Microsoft’s online service), then the text is checked phrase by phrase. <b>Accuracy</b>: a phrase is green once you said it in order in any attempt, so restarting or correcting yourself is fine. Fillers (uh, um), repeated words and “I mean” are ignored. Yellow words were heard only in pieces (half credit); red words were missed. <b>Fluency</b> is scored separately and goes down with restarts, fillers, repeats and a slow pace. You get 15 seconds per sentence (longer for a whole passage); listening stops once every phrase is green, or after a few seconds of silence. It measures whether a listener would understand you, not individual sounds.</p>
     </aside>
   </div>
+
+  <section class="panel" id="wordlist" aria-label="My pronunciation list">
+    <div class="wl-head">
+      <div>
+        <p class="label" style="margin:0">My pronunciation list <span class="wl-count" id="wlCount"></span></p>
+        <p class="wl-sub">Words you didn’t say clearly, with IPA and meaning. Click a word to hear it slowly.</p>
+      </div>
+      <div class="wl-tools">
+        <div class="chips" id="wlScope" role="group" aria-label="Which days">
+          <button class="chip" type="button" data-scope="today" aria-pressed="true">Today</button>
+          <button class="chip" type="button" data-scope="all" aria-pressed="false">All days</button>
+        </div>
+        <button class="btn" type="button" id="wlDownload">⬇ Download list (CSV)</button>
+      </div>
+    </div>
+    <div class="wl-wrap">
+      <table class="wl">
+        <thead><tr><th scope="col">Word</th><th scope="col">IPA</th><th scope="col">Meaning</th></tr></thead>
+        <tbody id="wlBody"></tbody>
+      </table>
+    </div>
+    <p class="wl-foot">IPA and meanings come from the free, open-source Free Dictionary API (dictionaryapi.dev). Only the word itself is sent, and results are saved in this browser. The CSV opens in Excel or Google Sheets.</p>
+  </section>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -1005,11 +1047,134 @@ function renderSummary(){
   $('#avg').innerHTML = avg == null ? '–' : `${avg}<small> / 100</small>`;
   $('#done').textContent = `${rs.length}/${S.sentences.length}`;
   $('#tries').textContent = S.tries;
-  const missed = [...new Set(rs.flatMap(r => r.missed))];
-  const rv = $('#review'); rv.innerHTML = '';
-  if (!missed.length) rv.innerHTML = '<p class="empty">Words you didn&rsquo;t say clearly will appear here after you practice.</p>';
-  missed.forEach(w => { const b = document.createElement('button'); b.textContent = w; b.onclick = () => speak(w, 0.7); rv.appendChild(b); });
   renderHistory();
+  renderWordList();
+}
+
+/* ---------- my pronunciation list: word · IPA · meaning ---------- */
+const DICT_API = 'https://api.dictionaryapi.dev/api/v2/entries/en/';
+const dict = { mem: {}, inflight: {}, active: 0, queue: [] };
+S.wlScope = store.get('wlScope', 'today') === 'all' ? 'all' : 'today';
+function wlKey(w){ return String(w || '').toLowerCase().replace(/[’‘]/g, "'").replace(/\s+/g, ' ').trim(); }
+function collectMissed(scope){
+  const map = new Map();
+  const add = (w, day) => {
+    const k = wlKey(w); if (!/[a-z]/.test(k)) return;
+    const e = map.get(k) || { word: k, count: 0, last: '' };
+    e.count++; if (day > e.last) e.last = day; map.set(k, e);
+  };
+  if (scope === 'today'){
+    S.sentences.forEach(s => { const r = S.results[s]; if (r) (r.missed || []).forEach(w => add(w, S.date)); });
+  } else {
+    store.keys().filter(k => /^res:\d{4}-\d{2}-\d{2}$/.test(k)).forEach(k => {
+      const day = k.slice(4), r = store.get(k, null);
+      Object.values((r && r.results) || {}).forEach(x => ((x && x.missed) || []).forEach(w => add(w, day)));
+    });
+  }
+  return [...map.values()].sort((a, b) => b.last.localeCompare(a.last) || b.count - a.count || a.word.localeCompare(b.word));
+}
+function parseDict(j){
+  if (!Array.isArray(j) || !j.length) return { ok: false };
+  const str = v => typeof v === 'string' ? v.slice(0, 300) : '';
+  const ph = j.flatMap(e => (e && e.phonetics) || []);
+  const us = ph.find(p => p && p.text && /-us\.mp3$/.test(p.audio || ''));
+  const ipa = str((us && us.text) || j[0].phonetic || ((ph.find(p => p && p.text) || {}).text));
+  const seen = new Set(), means = [];
+  j.forEach(e => ((e && e.meanings) || []).forEach(m => {
+    const d = m && m.definitions && m.definitions[0];
+    if (!d || means.length >= 2 || seen.has(m.partOfSpeech)) return;
+    seen.add(m.partOfSpeech); means.push({ pos: str(m.partOfSpeech), def: str(d.definition) });
+  }));
+  return { ok: true, ipa, means };
+}
+function dictCached(w){
+  if (dict.mem[w]) return dict.mem[w];
+  const c = store.get('dict:' + w, null);
+  if (c && (c.ok || Date.now() - (c.at || 0) < 7 * 864e5)){ dict.mem[w] = c; return c; }   // re-check "not found" weekly
+  return null;
+}
+function dictPump(){
+  while (dict.active < 4 && dict.queue.length){
+    const job = dict.queue.shift(); dict.active++;
+    job().finally(() => { dict.active--; dictPump(); });
+  }
+}
+function dictGet(w){
+  const c = dictCached(w); if (c) return Promise.resolve(c);
+  if (dict.inflight[w]) return dict.inflight[w];
+  return dict.inflight[w] = new Promise(resolve => {
+    dict.queue.push(() => fetch(DICT_API + encodeURIComponent(w), { credentials: 'omit', referrerPolicy: 'no-referrer' })
+      .then(r => r.status === 404 ? [] : r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+      .then(j => { const e = parseDict(j); e.at = Date.now(); store.set('dict:' + w, e); dict.mem[w] = e; resolve(e); })
+      .catch(() => resolve({ ok: false, err: true }))           // network trouble: not cached, retried next time
+      .finally(() => { delete dict.inflight[w]; }));
+    dictPump();
+  });
+}
+function fillDictCells(tdI, tdM, e){
+  tdI.classList.remove('pending'); tdM.classList.remove('pending'); tdM.textContent = '';
+  if (e.ok){
+    tdI.textContent = e.ipa || '—';
+    if (!e.means.length) tdM.textContent = '—';
+    e.means.forEach(m => {
+      const d = document.createElement('div');
+      if (m.pos){ const i = document.createElement('i'); i.textContent = m.pos; d.appendChild(i); }
+      d.appendChild(document.createTextNode(m.def)); tdM.appendChild(d);
+    });
+  } else {
+    tdI.textContent = '—';
+    tdM.textContent = e.err ? 'Couldn’t look this up right now (offline?). It will retry next time.' : 'Not found in the dictionary.';
+  }
+}
+function renderWordList(){
+  const body = $('#wlBody'); if (!body) return;
+  const items = collectMissed(S.wlScope);
+  document.querySelectorAll('#wlScope [data-scope]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.scope === S.wlScope)));
+  $('#wlCount').textContent = items.length ? `· ${items.length} word${items.length > 1 ? 's' : ''}` : '';
+  $('#wlDownload').disabled = !items.length;
+  body.textContent = '';
+  if (!items.length){
+    const tr = document.createElement('tr'), td = document.createElement('td');
+    td.colSpan = 3; td.className = 'empty';
+    td.textContent = S.wlScope === 'today' ? 'Practice a few sentences. Words you don’t say clearly will be listed here.' : 'No missed words saved yet.';
+    tr.appendChild(td); body.appendChild(tr); return;
+  }
+  items.forEach(it => {
+    const tr = document.createElement('tr');
+    const tdW = document.createElement('td'), tdI = document.createElement('td'), tdM = document.createElement('td');
+    tdI.className = 'wl-ipa'; tdM.className = 'wl-mean';
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'wl-word';
+    b.textContent = it.word; b.title = 'Hear it slowly'; b.onclick = () => speak(it.word, 0.7);
+    tdW.appendChild(b);
+    if (S.wlScope === 'all' && it.count > 1){
+      const n = document.createElement('span'); n.className = 'wl-n'; n.textContent = '×' + it.count; n.title = `Missed ${it.count} times`; tdW.appendChild(n);
+    }
+    tr.append(tdW, tdI, tdM); body.appendChild(tr);
+    const c = dictCached(it.word);
+    if (c) fillDictCells(tdI, tdM, c);
+    else { tdI.textContent = '…'; tdM.textContent = 'Looking up…'; tdI.classList.add('pending'); tdM.classList.add('pending'); dictGet(it.word).then(e => fillDictCells(tdI, tdM, e)); }
+  });
+}
+async function downloadWordList(){
+  const items = collectMissed(S.wlScope);
+  if (!items.length) return;
+  const btn = $('#wlDownload'), label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Preparing…';
+  try {
+    const rows = await Promise.all(items.map(it => dictGet(it.word).then(e => [
+      it.word,
+      e.ok ? e.ipa : '',
+      e.ok ? e.means.map(m => (m.pos ? `(${m.pos}) ` : '') + m.def).join(' ; ') : ''
+    ])));
+    // Quote every cell, and neutralise anything a spreadsheet could treat as a formula.
+    const cell = v => { v = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };
+    const csv = '﻿' + [['Word', 'IPA', 'Meaning'], ...rows].map(r => r.map(cell).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a'); a.href = url;
+    a.download = `pronunciation-list-${S.wlScope === 'today' ? S.date : 'all-days-to-' + S.date}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } finally { btn.textContent = label; btn.disabled = false; }
 }
 function renderHistory(){
   const bars = $('#bars'), bx = $('#barx'); bars.innerHTML = ''; bx.innerHTML = '';
@@ -1190,6 +1355,8 @@ if (location.hash === '#selftest'){
     } catch (e){ engineStatus('Self-test failed: ' + e.message, 'err'); }
   })();
 }
+document.querySelectorAll('#wlScope [data-scope]').forEach(b => b.onclick = () => { S.wlScope = b.dataset.scope; store.set('wlScope', S.wlScope); renderWordList(); });
+$('#wlDownload').onclick = downloadWordList;
 $('#whole').checked = S.whole;
 $('#whole').onchange = e => { stopAll(); S.whole = e.target.checked; store.set('whole', S.whole); loadDay(true); };
 $('#rate').value = S.rate;$('#rateOut').textContent = S.rate.toFixed(2) + '×';
