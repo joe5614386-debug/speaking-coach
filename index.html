@@ -10,7 +10,7 @@
 /* Layout: a practice console. Top bar = accent + voice controls; main = sentence script you read line by line; side = today's score and words to review. */
 :root{
   --bg:#F2F5F4; --surface:#FFFFFF; --sunk:#E8EEEC; --ink:#16201E; --muted:#5B6A66; --line:#D6DFDB;
-  --accent:#1D6B58; --accent-ink:#FFFFFF; --rec:#C2410C;
+  --accent:#1D6B58; --accent-ink:#FFFFFF; --rec:#C2410C; --c-model:#7B4FC0; --c-you:#00805F;
   --good:#2F7D4F; --good-bg:#E3F2E8; --warn:#9A6411; --warn-bg:#FBF0DA; --bad:#B42318; --bad-bg:#FBE6E3;
   --f-display:"Bricolage Grotesque", "Noto Sans TC", system-ui, sans-serif;
   --f-body:"Noto Sans TC", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
@@ -20,12 +20,12 @@
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0E1412; --surface:#161F1C; --sunk:#1D2825; --ink:#E5ECE9; --muted:#93A39E; --line:#2A3632;
-  --accent:#5CC3A6; --accent-ink:#0B1714; --rec:#F2804A;
+  --accent:#5CC3A6; --accent-ink:#0B1714; --rec:#F2804A; --c-model:#8E6CDB; --c-you:#1A9C77;
   --good:#6FD39A; --good-bg:#183326; --warn:#F0BE62; --warn-bg:#3A2D12; --bad:#F2877B; --bad-bg:#3D1D19;
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0E1412; --surface:#161F1C; --sunk:#1D2825; --ink:#E5ECE9; --muted:#93A39E; --line:#2A3632;
-  --accent:#5CC3A6; --accent-ink:#0B1714; --rec:#F2804A;
+  --accent:#5CC3A6; --accent-ink:#0B1714; --rec:#F2804A; --c-model:#8E6CDB; --c-you:#1A9C77;
   --good:#6FD39A; --good-bg:#183326; --warn:#F0BE62; --warn-bg:#3A2D12; --bad:#F2877B; --bad-bg:#3D1D19;
   color-scheme:dark}
 *{box-sizing:border-box}
@@ -115,6 +115,22 @@ ol.sents{list-style:none;margin:0;padding:0;display:grid;gap:2px}
 .score.good{background:var(--good-bg);color:var(--good)}
 .score.fair{background:var(--warn-bg);color:var(--warn)}
 .score.low{background:var(--bad-bg);color:var(--bad)}
+.takebar{display:flex;flex-wrap:wrap;gap:6px;flex-basis:100%;margin-top:2px}
+.tbtn{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 11px;font-size:12.5px;color:var(--ink);line-height:1.5}
+.tbtn:hover{border-color:var(--accent)}
+.tbtn[aria-expanded="true"]{background:var(--sunk);border-color:var(--accent)}
+.tone{grid-column:2 / 4;border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--surface);font-size:13px;color:var(--muted);min-width:0}
+.tone-legend{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;font-size:12px;color:var(--muted);margin-bottom:4px}
+.tone-legend b{color:var(--ink);font-weight:600}
+.tone-legend i{display:inline-block;width:20px;height:0;border-top:2px solid var(--c-you);vertical-align:middle;margin-right:6px}
+.tone-legend i.m{border-top:2px dashed var(--c-model)}
+.tone-wrap{position:relative}
+.tone-wrap svg{width:100%;height:auto;display:block;overflow:visible}
+.tone-tip{position:absolute;top:-4px;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:3px 8px;border-radius:6px;white-space:nowrap;transform:translateX(-50%);font-variant-numeric:tabular-nums}
+.tone-tips{margin:8px 0 0;padding-left:18px;color:var(--ink);line-height:1.6}
+.tone-foot{margin:6px 0 0;font-size:12px}
+.ipa-p{color:var(--accent);font-weight:700}
+.ipa-s{font-weight:600}
 .heard{font-family:var(--f-read);font-style:italic;color:var(--ink);overflow-wrap:anywhere}
 .live{font-style:italic;color:var(--muted);overflow-wrap:anywhere}
 .timer{display:inline-block;width:90px;height:6px;border-radius:3px;background:var(--line);overflow:hidden;align-self:center}
@@ -288,7 +304,7 @@ table.wl{width:100%;min-width:520px;border-collapse:collapse;font-size:14px}
         <div class="bars" id="bars"></div>
         <div class="bar-x" id="barx"></div>
       </section>
-      <p class="foot">How scoring works: speech recognition listens (On-device: an open-source Whisper model running in this browser, so your voice never leaves your computer; Browser: Google’s or Microsoft’s online service), then the text is checked phrase by phrase. <b>Accuracy</b>: a phrase is green once you said it in order in any attempt, so restarting or correcting yourself is fine. Fillers (uh, um), repeated words and “I mean” are ignored. Yellow words were heard only in pieces (half credit); red words were missed. <b>Fluency</b> is scored separately and goes down with restarts, fillers, repeats and a slow pace. You get 15 seconds per sentence (longer for a whole passage); listening stops once every phrase is green, or after a few seconds of silence. It measures whether a listener would understand you, not individual sounds.</p>
+      <p class="foot">How scoring works: speech recognition listens (On-device: an open-source Whisper model running in this browser, so your voice never leaves your computer; Browser: Google’s or Microsoft’s online service), then the text is checked phrase by phrase. <b>Accuracy</b>: a phrase is green once you said it in order in any attempt, so restarting or correcting yourself is fine. Fillers (uh, um), repeated words and “I mean” are ignored. Yellow words were heard only in pieces (half credit); red words were missed. <b>Fluency</b> is scored separately and goes down with restarts, fillers, repeats and a slow pace. You get 15 seconds per sentence (longer for a whole passage); listening stops once every phrase is green, or after a few seconds of silence. It measures whether a listener would understand you, not individual sounds. <b>Your recordings</b> (“My recording”, “Model, then me”, “Intonation”) stay in this browser tab and are never uploaded; they disappear when you close the tab.</p>
     </aside>
   </div>
 
@@ -731,6 +747,8 @@ function listen(i, done){
   const ses = { i, finals: [], interim: '', ok: scored.map(s => !s), chunkOk: T.chunks.map(() => false),
                 err: null, closed: false, start: Date.now(), lastHeard: 0, doneAt: 0, rec: null, tick: null };
   S.session = ses;
+  stopPlayback();
+  ses.take = startTake();
   const allOk = () => ses.chunkOk.every(Boolean);
   const absorb = alts => {
     for (const a of alts){
@@ -775,6 +793,8 @@ function listen(i, done){
     if (ses.interim) ses.finals.push(ses.interim.trim());
     absorb([{t: ses.interim}]);
     const heardAny = ses.finals.some(t => t);
+    const raw = ses.take ? ses.take.stop() : null;
+    if (heardAny && raw) keepTake(sentence, raw);
     if (ses.err === 'not-allowed' || ses.err === 'service-not-allowed'){
       showMsg(i, 'Microphone access was denied. Click the lock icon left of the address bar, allow the microphone, and try again.');
     } else if (!heardAny){
@@ -838,6 +858,334 @@ function listen(i, done){
   try { startRec(); } catch(e){ finish(); }
 }
 function stopRec(){ if (S.session) S.session.finish(); else if (S.rec){ try{ S.rec.abort(); }catch(e){} S.rec = null; } }
+
+/* ---------- your recording: play back, compare with the model, intonation ----------
+   Every scored attempt is also recorded at 16 kHz. Recordings live only in this tab (never
+   uploaded, gone when it closes). Only the last full attempt is kept, trimmed of silence. */
+const TAKE_SR = 16000;
+const takes = new Map();            // sentence -> { audio: Float32Array, id, pitch? }
+let takeSeq = 0;
+function startTake(){
+  const t = { chunks: [], len: 0, ctx: null, nodes: null, stopped: false };
+  (async () => {
+    try {
+      if (!(micStream && micStream.active)) await openMic();
+      if (t.stopped || !(micStream && micStream.active)) return;
+      t.ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: TAKE_SR });
+      const src = t.ctx.createMediaStreamSource(micStream);
+      const proc = t.ctx.createScriptProcessor(4096, 1, 1), mute = t.ctx.createGain();
+      mute.gain.value = 0; src.connect(proc); proc.connect(mute); mute.connect(t.ctx.destination);
+      proc.onaudioprocess = e => {
+        if (t.stopped || t.len > TAKE_SR * 200) return;
+        const c = new Float32Array(e.inputBuffer.getChannelData(0)); t.chunks.push(c); t.len += c.length;
+      };
+      t.nodes = [src, proc, mute];
+    } catch(e){ /* no recording in this browser: scoring still works */ }
+  })();
+  t.stop = () => {
+    t.stopped = true;
+    try { t.nodes && t.nodes.forEach(n => n.disconnect()); } catch(e){}
+    try { t.ctx && t.ctx.close(); } catch(e){}
+    const a = new Float32Array(t.len); let o = 0;
+    for (const c of t.chunks){ a.set(c, o); o += c.length; }
+    return a;
+  };
+  return t;
+}
+function frameRms(a, hop){
+  const n = Math.floor(a.length / hop), out = new Float32Array(n);
+  for (let f = 0; f < n; f++){ let s = 0; for (let k = f * hop; k < (f + 1) * hop; k++) s += a[k] * a[k]; out[f] = Math.sqrt(s / hop); }
+  return out;
+}
+function voicedRuns(a){
+  const hop = 320, rms = frameRms(a, hop);                 // 20 ms frames
+  if (!rms.length) return { hop, runs: [] };
+  const sorted = Array.from(rms).sort((x, y) => x - y);
+  const th = Math.max(0.006, sorted[Math.floor(sorted.length * 0.1)] * 3, sorted[Math.floor(sorted.length * 0.98)] * 0.08);
+  const runs = []; let cur = null, gap = 0;
+  for (let f = 0; f < rms.length; f++){
+    if (rms[f] > th){ if (cur && gap <= 45) cur[1] = f; else { cur = [f, f]; runs.push(cur); } gap = 0; }   // pauses < 0.9 s stay inside
+    else gap++;
+  }
+  return { hop, runs: runs.filter(r => r[1] - r[0] >= 10) };                                              // ≥ 0.2 s
+}
+function lastAttempt(a){
+  const { hop, runs } = voicedRuns(a);
+  if (!runs.length) return null;
+  const longest = Math.max(...runs.map(r => r[1] - r[0]));
+  const pick = runs.slice().reverse().find(r => r[1] - r[0] >= longest * 0.6);   // the last attempt that is a full try
+  return a.slice(Math.max(0, (pick[0] - 8) * hop), Math.min(a.length, (pick[1] + 12) * hop));
+}
+function trimSpan(a){
+  const { hop, runs } = voicedRuns(a);
+  if (!runs.length) return a;
+  return a.slice(Math.max(0, (runs[0][0] - 5) * hop), Math.min(a.length, (runs[runs.length - 1][1] + 8) * hop));
+}
+function keepTake(sentence, raw){
+  const a = lastAttempt(raw);
+  if (!a || a.length < TAKE_SR * 0.3) return;
+  takes.delete(sentence); takes.set(sentence, { audio: a, id: ++takeSeq });
+  while (takes.size > 40) takes.delete(takes.keys().next().value);
+}
+
+/* playback: one sound at a time; a newer request cancels the older sequence */
+let playCtx = null, playSrc = null, playSeq = 0;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function stopPlayback(){
+  playSeq++;
+  try { playSrc && playSrc.stop(); } catch(e){}
+  playSrc = null;
+}
+function playPcm(a){
+  return new Promise(res => {
+    try {
+      playCtx = playCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (playCtx.state === 'suspended') playCtx.resume();
+      const b = playCtx.createBuffer(1, a.length, TAKE_SR); b.copyToChannel(a, 0);
+      const s = playCtx.createBufferSource(); s.buffer = b; s.connect(playCtx.destination);
+      s.onended = () => { if (playSrc === s) playSrc = null; res(); };
+      playSrc = s; s.start();
+    } catch(e){ res(); }
+  });
+}
+function playModel(s){
+  const m = modelCache.get(modelKey(s));
+  if (m) return playPcm(m.audio);
+  return new Promise(r => speak(s, S.rate, r));
+}
+async function playMine(s){
+  stopPlayback(); window.speechSynthesis && speechSynthesis.cancel();
+  const t = takes.get(s); if (t) await playPcm(t.audio);
+}
+async function playCompare(s){
+  stopPlayback(); const my = playSeq;
+  await playModel(s); if (my !== playSeq) return;
+  await sleep(400);   if (my !== playSeq) return;
+  const t = takes.get(s); if (t) await playPcm(t.audio);
+}
+
+/* model voice for the intonation chart: the Azure neural voice (same service and quota as MP3 downloads) */
+const modelCache = new Map();
+function modelKey(s){ return [S.accent, $('#cloudVoice').value, S.rate, s].join('|'); }
+async function getModel(s){
+  const k = modelKey(s);
+  if (modelCache.has(k)) return modelCache.get(k);
+  const blob = await ttsChunk(s);
+  const ctx = new OfflineAudioContext(1, 1, TAKE_SR);            // decoding resamples to 16 kHz
+  const ab = await ctx.decodeAudioData(await blob.arrayBuffer());
+  const audio = trimSpan(ab.getChannelData(0).slice());
+  const m = { audio, pitch: analyzePitch(audio) };
+  modelCache.set(k, m); refreshUsage();
+  return m;
+}
+
+/* pitch (YIN) and loudness, 70–400 Hz. Pitch is in semitones from the speaker's own median, so a low
+   and a high voice can be compared; NaN where there is no voiced sound. */
+function analyzePitch(a){
+  const W = 480, tauMin = 40, tauMax = 230;
+  const hop = Math.max(160, Math.ceil(a.length / 2500));
+  const n = Math.max(0, Math.floor((a.length - W - tauMax) / hop));
+  const hz = new Float32Array(n), db = new Float32Array(n), d = new Float32Array(tauMax + 2);
+  for (let f = 0; f < n; f++){
+    const o = f * hop;
+    let e = 0; for (let k = 0; k < W; k++) e += a[o + k] * a[o + k];
+    db[f] = 20 * Math.log10(Math.sqrt(e / W) + 1e-6);
+    for (let tau = 1; tau <= tauMax + 1; tau++){
+      let s = 0; for (let k = 0; k < W; k++){ const x = a[o + k] - a[o + k + tau]; s += x * x; } d[tau] = s;
+    }
+    let run = 0; for (let tau = 1; tau <= tauMax + 1; tau++){ run += d[tau]; d[tau] = run ? d[tau] * tau / run : 1; }
+    let best = -1;
+    for (let tau = tauMin; tau <= tauMax; tau++){
+      if (d[tau] < 0.15){ while (tau < tauMax && d[tau + 1] < d[tau]) tau++; best = tau; break; }
+    }
+    if (best < 0){ hz[f] = 0; continue; }
+    const x0 = d[best - 1], x1 = d[best], x2 = d[best + 1], den = x0 - 2 * x1 + x2;
+    hz[f] = TAKE_SR / (den ? best + (x0 - x2) / (2 * den) : best);
+  }
+  const maxDb = n ? Math.max(...db) : 0;
+  const voiced = Array.from(hz).map((v, k) => v > 0 && db[k] > maxDb - 32 && db[k] > -55 ? v : 0);
+  const good = voiced.filter(v => v > 0).sort((x, y) => x - y);
+  const med = good.length ? good[Math.floor(good.length / 2)] : 0;
+  const st = new Float32Array(n).fill(NaN);
+  for (let f = 0; f < n; f++){
+    const v = voiced[f];
+    if (!v || !med || v < med * 0.55 || v > med * 1.9) continue;       // octave errors
+    const win = voiced.slice(Math.max(0, f - 2), f + 3).filter(x => x > 0).sort((x, y) => x - y);
+    st[f] = 12 * Math.log2(win[Math.floor(win.length / 2)] / med);       // 5-frame median
+  }
+  const loud = Array.from(db).map(v => Math.max(0, Math.min(1, (v - (maxDb - 36)) / 36)));
+  return { st, loud, voicedFrac: n ? good.length / n : 0 };
+}
+function buckets(p, N){
+  const n = p.st.length, out = [];
+  for (let b = 0; b < N; b++){
+    const a0 = Math.floor(b * n / N), a1 = Math.max(a0 + 1, Math.floor((b + 1) * n / N));
+    let s = 0, c = 0, l = 0;
+    for (let k = a0; k < a1 && k < n; k++){ l = Math.max(l, p.loud[k]); if (!isNaN(p.st[k])){ s += p.st[k]; c++; } }
+    out.push({ st: c && c >= (a1 - a0) / 2 ? s / c : NaN, loud: l });
+  }
+  return out;
+}
+function pitchRange(b){
+  const v = b.map(o => o.st).filter(x => !isNaN(x)).sort((x, y) => x - y);
+  return v.length < 8 ? null : v[Math.floor(v.length * 0.9)] - v[Math.floor(v.length * 0.1)];
+}
+function endingMove(b){
+  const v = b.map(o => o.st).filter(x => !isNaN(x));
+  if (v.length < 12) return 0;
+  const k = Math.max(3, Math.round(v.length * 0.15)), mean = arr => arr.reduce((a, x) => a + x, 0) / arr.length;
+  return mean(v.slice(-k)) - mean(v.slice(-2 * k, -k));
+}
+function shapeMatch(a, b){
+  const pairs = a.map((o, k) => [o.st, b[k].st]).filter(([x, y]) => !isNaN(x) && !isNaN(y));
+  if (pairs.length < 20) return null;
+  const mx = pairs.reduce((s, p) => s + p[0], 0) / pairs.length, my = pairs.reduce((s, p) => s + p[1], 0) / pairs.length;
+  let sxy = 0, sxx = 0, syy = 0;
+  pairs.forEach(([x, y]) => { sxy += (x - mx) * (y - my); sxx += (x - mx) ** 2; syy += (y - my) ** 2; });
+  return sxx && syy ? sxy / Math.sqrt(sxx * syy) : null;
+}
+function toneTips(yb, mb){
+  const tips = [], yr = pitchRange(yb), one = x => x.toFixed(1);
+  if (yr == null) return ['Couldn’t find a clear pitch in your recording. Try again a little louder and closer to the mic.'];
+  if (!mb){ tips.push(`Your pitch range: ${one(yr)} semitones. Natural English sentences often move 5–10 semitones.`); return tips; }
+  const mr = pitchRange(mb);
+  if (mr != null){
+    if (yr < mr * 0.6 && mr >= 4) tips.push(`Your voice is flatter than the model (pitch range ${one(yr)} vs ${one(mr)} semitones). Let the important words go higher.`);
+    else if (yr > mr * 1.6 && yr - mr > 3) tips.push(`Your pitch moves more than the model’s (${one(yr)} vs ${one(mr)} semitones). Try a steadier line.`);
+    else tips.push(`Your pitch range is close to the model’s (${one(yr)} vs ${one(mr)} semitones).`);
+  }
+  const me = endingMove(mb), ye = endingMove(yb);
+  if (me < -1.5 && ye > 0.5) tips.push('The model goes down at the end; yours goes up, which can sound like a question.');
+  else if (me > 1.5 && ye < -0.5) tips.push('The model goes up at the end (a question); yours goes down.');
+  else if ((me < -1.5 && ye < -0.5) || (me > 1.5 && ye > 0.5)) tips.push('Your ending moves the same way as the model’s.');
+  const r = yr >= 2 ? shapeMatch(yb, mb) : null;        // a nearly flat line has no shape to compare
+  if (r != null){
+    if (r >= 0.5) tips.push('The overall rise and fall follows the model well.');
+    else if (r < 0.2) tips.push('The rise and fall is different from the model. Play “Model, then me” and listen for where the model goes up.');
+  }
+  return tips;
+}
+
+const SVGNS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs, parent){ const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; }
+function drawTone(box, yp, mp, note){
+  box.textContent = '';
+  const H = 172, L = 46, T = 10, B = 124;
+  const yb0 = yp, mb0 = mp;
+  const X = k => L + k / (N - 1) * (R - L);
+  const Y = st => T + (1 - (Math.max(-9, Math.min(9, st)) + 9) / 18) * (B - T);
+  const legend = document.createElement('div'); legend.className = 'tone-legend';
+  legend.innerHTML = '<b>Intonation</b>' + (mb0 ? '<span><i class="m"></i>Model</span>' : '') + '<span><i></i>You</span>' +
+    '<span>Pitch in semitones from each speaker’s own average · time stretched to the same length</span>';
+  box.appendChild(legend);
+
+  const wrap = document.createElement('div'); wrap.className = 'tone-wrap'; box.appendChild(wrap);
+  const W = Math.max(220, Math.round(wrap.getBoundingClientRect().width) || 640), R = W - 56;   // drawn at real size: text stays readable on phones
+  const N = Math.max(80, Math.min(200, Math.round((R - L) / 3.4)));
+  const yb = buckets(yb0, N), mb = mb0 ? buckets(mb0, N) : null;
+  const tips = toneTips(yb, mb);
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Pitch and loudness of ' + (mb ? 'the model and ' : '') + 'your recording. ' + tips.join(' ') }, wrap);
+  [6, 0, -6].forEach(v => {
+    svgEl('line', { x1: L, x2: R, y1: Y(v), y2: Y(v), style: 'stroke:var(--line);stroke-width:1' + (v ? ';stroke-dasharray:2 4' : '') }, svg);
+    const t = svgEl('text', { x: L - 8, y: Y(v) + 3.5, 'text-anchor': 'end', style: 'fill:var(--muted);font-size:10px' }, svg);
+    t.textContent = v > 0 ? '+6' : v < 0 ? '−6' : 'avg';
+  });
+  const line = (b, color, dash) => {
+    let d = '', open = false;
+    b.forEach((o, k) => { if (isNaN(o.st)){ open = false; return; } d += (open ? 'L' : 'M') + X(k).toFixed(1) + ' ' + Y(o.st).toFixed(1); open = true; });
+    if (d) svgEl('path', { d, fill: 'none', style: `stroke:var(${color});stroke-width:2;stroke-linejoin:round;stroke-linecap:round` + (dash ? ';stroke-dasharray:6 4' : '') }, svg);
+    let last = -1; b.forEach((o, k) => { if (!isNaN(o.st)) last = k; });
+    return last < 0 ? null : Y(b[last].st);
+  };
+  const ends = [];
+  if (mb){ const y = line(mb, '--c-model', true); if (y != null) ends.push(['Model', y]); }
+  { const y = line(yb, '--c-you', false); if (y != null) ends.push(['You', y]); }
+  if (ends.length === 2 && Math.abs(ends[0][1] - ends[1][1]) < 13){       // keep the end labels apart
+    const mid = (ends[0][1] + ends[1][1]) / 2, up = ends[0][1] <= ends[1][1] ? 0 : 1;
+    ends[up][1] = mid - 6.5; ends[1 - up][1] = mid + 6.5;
+  }
+  ends.forEach(([name, y]) => { const t = svgEl('text', { x: R + 8, y: y + 3.5, style: 'fill:var(--ink);font-size:11px' }, svg); t.textContent = name; });
+
+  // loudness ribbons: darker = louder (stressed syllables are louder and usually higher)
+  const rows = mb ? [['Model', mb, '--c-model', 138], ['You', yb, '--c-you', 156]] : [['You', yb, '--c-you', 138]];
+  const bw = (R - L) / N;
+  rows.forEach(([name, b, color, y0]) => {
+    const t = svgEl('text', { x: L - 8, y: y0 + 8.5, 'text-anchor': 'end', style: 'fill:var(--muted);font-size:10px' }, svg); t.textContent = name;
+    b.forEach((o, k) => { if (o.loud > 0.04) svgEl('rect', { x: (L + k * bw).toFixed(1), y: y0, width: (bw + 0.4).toFixed(1), height: 11, style: `fill:var(${color});opacity:${(0.12 + o.loud * 0.88).toFixed(2)}` }, svg); });
+  });
+
+  // hover: crosshair + values
+  const cross = svgEl('line', { x1: 0, x2: 0, y1: T, y2: B, style: 'stroke:var(--muted);stroke-width:1', visibility: 'hidden' }, svg);
+  const hit = svgEl('rect', { x: L, y: 0, width: R - L, height: H, fill: 'transparent' }, svg);
+  const tip = document.createElement('div'); tip.className = 'tone-tip'; tip.hidden = true; wrap.appendChild(tip);
+  const fmtSt = v => isNaN(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1);
+  hit.addEventListener('pointermove', e => {
+    const r = svg.getBoundingClientRect(), vx = (e.clientX - r.left) / r.width * W;
+    const k = Math.max(0, Math.min(N - 1, Math.round((vx - L) / (R - L) * (N - 1))));
+    cross.setAttribute('x1', X(k)); cross.setAttribute('x2', X(k)); cross.setAttribute('visibility', 'visible');
+    tip.hidden = false; tip.style.left = (X(k) / W * 100) + '%';
+    tip.textContent = (mb ? 'Model ' + fmtSt(mb[k].st) + ' · ' : '') + 'You ' + fmtSt(yb[k].st) + ' semitones';
+  });
+  hit.addEventListener('pointerleave', () => { cross.setAttribute('visibility', 'hidden'); tip.hidden = true; });
+
+  const cap = document.createElement('p'); cap.className = 'tone-foot';
+  cap.textContent = 'Bands under the chart show loudness: darker = louder. Stressed words are louder and usually higher.';
+  box.appendChild(cap);
+  const ul = document.createElement('ul'); ul.className = 'tone-tips';
+  tips.forEach(t => { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); });
+  box.appendChild(ul);
+  if (note){ const p = document.createElement('p'); p.className = 'tone-foot'; p.textContent = note; box.appendChild(p); }
+}
+async function syncTone(i){
+  const li = document.querySelector(`.sent[data-i="${i}"]`); if (!li) return;
+  const box = li.querySelector('.tone'), s = S.sentences[i], t = takes.get(s);
+  if (!box) return;
+  if (!t || S.toneOpen !== s){ box.hidden = true; box.textContent = ''; box.dataset.key = ''; return; }
+  const signedIn = !!(cloud.client && cloud.user), long = s.length > 400;
+  const key = t.id + '|' + (signedIn && !long ? modelKey(s) : 'solo');
+  if (box.dataset.key === key && !box.hidden) return;                  // already drawn
+  box.dataset.key = key; box.hidden = false; box.textContent = 'Analyzing your recording…';
+  await sleep(20);
+  if (!t.pitch) t.pitch = analyzePitch(t.audio);
+  let model = null, note = '';
+  if (long) note = 'The model overlay works one sentence at a time. Turn off “Read the whole passage” to compare.';
+  else if (!signedIn) note = 'Sign in (Cloud sync above) to overlay the model voice. It uses the same free Azure voice quota as MP3 downloads (about ' + s.length + ' characters for this sentence).';
+  else {
+    box.textContent = 'Getting the model voice…';
+    try { model = await getModel(s); }
+    catch(e){ note = TTS_ERR[e.message] || ('Couldn’t get the model voice (' + e.message + ').'); }
+  }
+  if (box.dataset.key !== key) return;                                 // closed or re-recorded meanwhile
+  drawTone(box, t.pitch, model && model.pitch, note || (model ? 'Your recording stays in this tab. The model is the Azure ' + ($('#cloudVoice').value === 'male' ? 'male' : 'female') + ' voice, so “Model, then me” now plays that voice too.' : ''));
+}
+
+/* stressed syllable in IPA: bold from the stress mark to the end of that syllable */
+const IPA_V = /[aeiouyæɑɒɐɔəɘɚɛɜɝɞɤɨɪɯʉʊʌʏøœɵ]/;
+function firstSyllable(p){
+  const c = Array.from(p); let k = 1;
+  while (k < c.length && !IPA_V.test(c[k])) k++;                              // onset
+  while (k < c.length && (IPA_V.test(c[k]) || /[ːˑ̯̃]/.test(c[k]))) k++;  // vowel or diphthong
+  let j = k; while (j < c.length && !IPA_V.test(c[j])) j++;                   // consonants after it
+  if (j >= c.length) return [p, ''];
+  let cut = Math.max(k, j - 1);                                               // one consonant starts the next syllable
+  if (cut - 1 > k && c[cut - 1] === '\u0361') cut -= 2;                      // keep tied pairs like d͡ʒ together
+  return [c.slice(0, cut).join(''), c.slice(cut).join('')];
+}
+function renderIpa(el, ipa){
+  el.textContent = '';
+  if (!ipa){ el.textContent = '—'; return; }
+  const body = ipa.replace(/^[\/\[]+|[\/\]]+$/g, '');
+  if (!/[ˈˌ]/.test(body)){ el.textContent = ipa; return; }
+  el.append('/');
+  body.split(/(?=[ˈˌ.])/).forEach(p => {
+    if (p[0] !== 'ˈ' && p[0] !== 'ˌ'){ el.append(p); return; }
+    const [syl, rest] = firstSyllable(p);
+    const b = document.createElement('b'); b.className = p[0] === 'ˈ' ? 'ipa-p' : 'ipa-s'; b.textContent = syl;
+    el.append(b, rest);
+  });
+  el.append('/');
+  el.title = 'Highlighted = the stressed syllable (say it louder and longer)';
+}
 
 /* ---------- persistence ---------- */
 function loadDay(skipPull){
@@ -1003,7 +1351,17 @@ function renderSentence(i){
     const lab = document.createElement('span'); lab.textContent = 'Heard:';
     const h = document.createElement('span'); h.className = 'heard'; h.textContent = '“' + r.heard + '”';
     res.append(lab, h);
+    if (takes.has(s)){
+      const bar = document.createElement('span'); bar.className = 'takebar';
+      const mk = (label, title, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.textContent = label; b.title = title; b.onclick = fn; bar.appendChild(b); return b; };
+      mk('▶ My recording', 'Play back what you just said', () => playMine(s));
+      mk('⇄ Model, then me', 'Hear the model and then yourself, back to back', () => playCompare(s));
+      const t = mk('〰 Intonation', 'Compare your pitch and stress with the model', () => { S.toneOpen = S.toneOpen === s ? null : s; renderSentence(i); });
+      t.setAttribute('aria-expanded', String(S.toneOpen === s));
+      res.append(bar);
+    }
   }
+  syncTone(i);
   li.classList.toggle('active', i === S.active);
 }
 function renderSentences(){
@@ -1014,7 +1372,7 @@ function renderSentences(){
       <div class="acts"><button class="ibtn play" title="Listen" aria-label="Listen">${ICON_PLAY}</button>
       <button class="ibtn mic" title="Repeat and get scored" aria-label="Repeat and get scored">${ICON_MIC}</button>
       <button class="ibtn dl" title="Download MP3" aria-label="Download MP3">${ICON_DL}</button></div>
-      <div class="result"></div>`;
+      <div class="result"></div><div class="tone" hidden></div>`;
     li.querySelector('.play').onclick = () => { setActive(i); speak(s); };
     li.querySelector('.dl').onclick = e => downloadMp3([s], fileBase() + '-' + String(i+1).padStart(2,'0'), e.currentTarget);
     li.querySelector('.mic').onclick = () => { if (S.session){ S.session.finish(); return; } setActive(i); speechSynthesis && speechSynthesis.cancel(); listen(i); };
@@ -1056,10 +1414,14 @@ const DICT_API = 'https://api.dictionaryapi.dev/api/v2/entries/en/';
 const dict = { mem: {}, inflight: {}, active: 0, queue: [] };
 S.wlScope = store.get('wlScope', 'today') === 'all' ? 'all' : 'today';
 function wlKey(w){ return String(w || '').toLowerCase().replace(/[’‘]/g, "'").replace(/\s+/g, ' ').trim(); }
+const FUNC_WORDS = new Set(('a an the i me my mine you your yours he him his she her hers it its we us our ours they them their theirs ' +
+  'this that these those am is are was were be been being do does did have has had will would can could shall should may might must not no ' +
+  'to of in on at for with by from up as into about over than then and or but so if there here').split(' '));
 function collectMissed(scope){
-  const map = new Map();
+  const map = new Map(), skipped = new Set();
   const add = (w, day) => {
     const k = wlKey(w); if (!/[a-z]/.test(k)) return;
+    if (k.split(' ').every(x => FUNC_WORDS.has(x))){ skipped.add(k); return; }   // "the", "I", "do not"…
     const e = map.get(k) || { word: k, count: 0, last: '' };
     e.count++; if (day > e.last) e.last = day; map.set(k, e);
   };
@@ -1071,7 +1433,9 @@ function collectMissed(scope){
       Object.values((r && r.results) || {}).forEach(x => ((x && x.missed) || []).forEach(w => add(w, day)));
     });
   }
-  return [...map.values()].sort((a, b) => b.last.localeCompare(a.last) || b.count - a.count || a.word.localeCompare(b.word));
+  const list = [...map.values()].sort((a, b) => b.last.localeCompare(a.last) || b.count - a.count || a.word.localeCompare(b.word));
+  list.skipped = skipped.size;
+  return list;
 }
 function parseDict(j){
   if (!Array.isArray(j) || !j.length) return { ok: false };
@@ -1114,7 +1478,7 @@ function dictGet(w){
 function fillDictCells(tdI, tdM, e){
   tdI.classList.remove('pending'); tdM.classList.remove('pending'); tdM.textContent = '';
   if (e.ok){
-    tdI.textContent = e.ipa || '—';
+    renderIpa(tdI, e.ipa);
     if (!e.means.length) tdM.textContent = '—';
     e.means.forEach(m => {
       const d = document.createElement('div');
@@ -1130,7 +1494,8 @@ function renderWordList(){
   const body = $('#wlBody'); if (!body) return;
   const items = collectMissed(S.wlScope);
   document.querySelectorAll('#wlScope [data-scope]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.scope === S.wlScope)));
-  $('#wlCount').textContent = items.length ? `· ${items.length} word${items.length > 1 ? 's' : ''}` : '';
+  $('#wlCount').textContent = (items.length ? `· ${items.length} word${items.length > 1 ? 's' : ''}` : '') +
+    (items.skipped ? ` · ${items.skipped} small word${items.skipped > 1 ? 's' : ''} like “the” or “I” not listed` : '');
   $('#wlDownload').disabled = !items.length;
   body.textContent = '';
   if (!items.length){
@@ -1212,7 +1577,7 @@ function runAll(shadow){
   };
   step(start);
 }
-function stopAll(){ setRunning(false); window.speechSynthesis && speechSynthesis.cancel(); stopRec(); }
+function stopAll(){ setRunning(false); stopPlayback(); window.speechSynthesis && speechSynthesis.cancel(); stopRec(); }
 
 /* ---------- MP3 download (Azure neural voices via the Supabase "tts" function) ---------- */
 const TTS_MAX = 2800;
