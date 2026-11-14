@@ -130,6 +130,15 @@ ol.sents{list-style:none;margin:0;padding:0;display:grid;gap:2px}
 .tone-tips{margin:8px 0 0;padding-left:18px;color:var(--ink);line-height:1.6}
 .tone-foot{margin:6px 0 0;font-size:12px}
 .ipa-p{color:var(--accent);font-weight:700}
+.w.snd{text-decoration:underline wavy var(--warn) 2px;text-underline-offset:5px}
+.beta{font-size:10px;font-family:var(--f-mono);border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--muted)}
+.sndbox{flex-basis:100%;border-left:3px solid var(--warn);background:var(--warn-bg);border-radius:6px;padding:8px 10px;color:var(--ink);font-size:13px;display:grid;gap:8px;line-height:1.5}
+.sndbox.ok{border-left-color:var(--good);background:var(--good-bg)}
+.sndbox.pending{border-left-color:var(--line);background:var(--sunk);color:var(--muted)}
+.sndhead{font-weight:600}
+.snditem{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline}
+.sndipa{font-family:"Charis SIL","Doulos SIL","Segoe UI","Lucida Sans Unicode",sans-serif;color:var(--muted)}
+.sndtip{flex-basis:100%}
 .ipa-s{font-weight:600}
 .heard{font-family:var(--f-read);font-style:italic;color:var(--ink);overflow-wrap:anywhere}
 .live{font-style:italic;color:var(--muted);overflow-wrap:anywhere}
@@ -234,6 +243,7 @@ table.wl{width:100%;min-width:520px;border-collapse:collapse;font-size:14px}
         <output id="rateOut"></output>
       </div>
       <label class="toggle" for="whole"><input type="checkbox" id="whole"> Read as one passage</label>
+      <label class="toggle" for="soundCheck" title="Checks each sound with an open-source phoneme model on this computer (one-time 240 MB download)"><input type="checkbox" id="soundCheck"> Sound check <span class="beta">beta</span></label>
       <label class="toggle" for="engine">Recognition
         <select id="engine">
           <option value="local">On-device (private, free)</option>
@@ -250,6 +260,7 @@ table.wl{width:100%;min-width:520px;border-collapse:collapse;font-size:14px}
       <span class="authmsg" id="engineMsg"></span>
       <button class="btn" id="engineLoad" type="button" hidden>Download model now</button>
     </div>
+    <div class="row" id="soundRow" hidden><span class="authmsg" id="soundMsg"></span></div>
     <div class="row dlrow">
       <p class="label" style="margin:0">MP3 download</p>
       <select id="cloudVoice" aria-label="Download voice">
@@ -304,7 +315,7 @@ table.wl{width:100%;min-width:520px;border-collapse:collapse;font-size:14px}
         <div class="bars" id="bars"></div>
         <div class="bar-x" id="barx"></div>
       </section>
-      <p class="foot">How scoring works: speech recognition listens (On-device: an open-source Whisper model running in this browser, so your voice never leaves your computer; Browser: Google’s or Microsoft’s online service), then the text is checked phrase by phrase. <b>Accuracy</b>: a phrase is green once you said it in order in any attempt, so restarting or correcting yourself is fine. Fillers (uh, um), repeated words and “I mean” are ignored. Yellow words were heard only in pieces (half credit); red words were missed. <b>Fluency</b> is scored separately and goes down with restarts, fillers, repeats and a slow pace. You get 15 seconds per sentence (longer for a whole passage); listening stops once every phrase is green, or after a few seconds of silence. It measures whether a listener would understand you, not individual sounds. <b>Your recordings</b> (“My recording”, “Model, then me”, “Intonation”) stay in this browser tab and are never uploaded; they disappear when you close the tab.</p>
+      <p class="foot">How scoring works: speech recognition listens (On-device: an open-source Whisper model running in this browser, so your voice never leaves your computer; Browser: Google’s or Microsoft’s online service), then the text is checked phrase by phrase. <b>Accuracy</b>: a phrase is green once you said it in order in any attempt, so restarting or correcting yourself is fine. Fillers (uh, um), repeated words and “I mean” are ignored. Yellow words were heard only in pieces (half credit); red words were missed. <b>Fluency</b> is scored separately and goes down with restarts, fillers, repeats and a slow pace. You get 15 seconds per sentence (longer for a whole passage); listening stops once every phrase is green, or after a few seconds of silence. It measures whether a listener would understand you, not individual sounds. <b>Your recordings</b> (“My recording”, “Model, then me”, “Intonation”) stay in this browser tab and are never uploaded; they disappear when you close the tab. <b>Sound check</b> (beta, optional) listens to each sound with an open-source phoneme model (wav2vec2 by Facebook AI, Apache-2.0, about 240 MB, downloaded once) running on this computer. Unlike word recognition, it does not guess words or sentences, so it can notice a wrong sound (think → sink) even when the word itself was recognised. Expected sounds come from the CMU Pronouncing Dictionary. Only the main words are checked, and normal variation (weak vowels, fast speech, accents) is ignored; an echoey room or a noisy mic can still cause a wrong hint now and then.</p>
     </aside>
   </div>
 
@@ -361,6 +372,7 @@ const S = {
   accent: store.get('accent', 'en-US'),
   whole: store.get('whole', false),
   engine: store.get('engine', 'local'),
+  soundCheck: store.get('soundCheck', false), toneOpen: null,
   voiceURI: store.get('voice', ''),
   rate: store.get('rate', 0.95),
   text: '', sample: false, sentences: [], results: {}, tries: 0,
@@ -814,6 +826,7 @@ function listen(i, done){
                   attempts: ses.finals.length, at: Date.now() };
       S.results[sentence] = r; S.tries++; saveResults();
       renderSentence(i); renderSummary();
+      if (S.soundCheck && takes.has(sentence)) runSoundCheck(sentence);
     }
     done && done(heardAny);
   };
@@ -1187,6 +1200,322 @@ function renderIpa(el, ipa){
   el.title = 'Highlighted = the stressed syllable (say it louder and longer)';
 }
 
+/* ---------- sound check: what you actually said, sound by sound ----------
+   An open-source phoneme model (wav2vec2, Facebook AI, Apache-2.0) runs in this browser and writes down the
+   sounds it hears without guessing words or sentences. The expected sounds come from the CMU Pronouncing
+   Dictionary (ISC licence). Both are lined up and only clear differences are reported. */
+const ARPA_CLASS = { AA: 'A', AO: 'A', AE: 'AE', AH: 'AH', AW: 'AW', AY: 'AY', EH: 'EH', ER: 'ER', EY: 'EY', IH: 'IH', IY: 'IY',
+  OW: 'OW', OY: 'OY', UH: 'UH', UW: 'UW', B: 'B', CH: 'CH', D: 'D', DH: 'DH', F: 'F', G: 'G', HH: 'H', JH: 'JH', K: 'K', L: 'L',
+  M: 'M', N: 'N', NG: 'NG', P: 'P', R: 'R', S: 'S', SH: 'SH', T: 'T', TH: 'TH', V: 'V', W: 'W', Y: 'Y', Z: 'Z', ZH: 'ZH' };
+const SOUND_IPA = { A: 'ɑ', AE: 'æ', AH: 'ʌ', AW: 'aʊ', AY: 'aɪ', EH: 'ɛ', ER: 'ɝ', EY: 'eɪ', IH: 'ɪ', IY: 'i', OW: 'oʊ', OY: 'ɔɪ',
+  UH: 'ʊ', UW: 'u', B: 'b', CH: 'tʃ', D: 'd', DH: 'ð', F: 'f', G: 'ɡ', H: 'h', JH: 'dʒ', K: 'k', L: 'l', M: 'm', N: 'n', NG: 'ŋ',
+  P: 'p', R: 'ɹ', S: 's', SH: 'ʃ', T: 't', TH: 'θ', V: 'v', W: 'w', Y: 'j', Z: 'z', ZH: 'ʒ' };
+const VOWELS = new Set(['A', 'AE', 'AH', 'AW', 'AY', 'EH', 'ER', 'EY', 'IH', 'IY', 'OW', 'OY', 'UH', 'UW']);
+// model symbols (espeak IPA) → sound classes; longest match first
+const IPA_TABLE = [
+  ['aɪɚ', ['AY', 'ER']], ['aɪə', ['AY', 'AH']], ['ɑːɹ', ['A', 'R']], ['ɔːɹ', ['A', 'R']], ['oːɹ', ['A', 'R']], ['ɛɹ', ['EH', 'R']],
+  ['ɪɹ', ['IH', 'R']], ['ʊɹ', ['UH', 'R']], ['əl', ['AH', 'L']], ['iə', ['IY', 'AH']], ['ju', ['Y', 'UW']], ['tʃ', ['CH']], ['dʒ', ['JH']],
+  ['ts', ['T', 'S']], ['aɪ', ['AY']], ['aʊ', ['AW']], ['eɪ', ['EY']], ['oʊ', ['OW']], ['əʊ', ['OW']], ['ɔɪ', ['OY']], ['oɪ', ['OY']],
+  ['ɑː', ['A']], ['ɔː', ['A']], ['ɜː', ['ER']], ['iː', ['IY']], ['uː', ['UW']], ['oː', ['OW']], ['eː', ['EY']], ['aː', ['A']],
+  ['ɑ', ['A']], ['ɒ', ['A']], ['ɔ', ['A']], ['a', ['A']], ['æ', ['AE']], ['ʌ', ['AH']], ['ə', ['AH']], ['ɐ', ['AH']], ['ɜ', ['ER']],
+  ['ɚ', ['ER']], ['ɝ', ['ER']], ['ɛ', ['EH']], ['e', ['EH']], ['ɪ', ['IH']], ['ᵻ', ['IH']], ['ɨ', ['IH']], ['i', ['IY']], ['ʊ', ['UH']],
+  ['u', ['UW']], ['o', ['OW']], ['b', ['B']], ['d', ['D']], ['ð', ['DH']], ['f', ['F']], ['ɡ', ['G']], ['g', ['G']], ['h', ['H']],
+  ['k', ['K']], ['l', ['L']], ['ɫ', ['L']], ['m', ['M']], ['n', ['N']], ['ŋ', ['NG']], ['p', ['P']], ['ɹ', ['R']], ['r', ['R']],
+  ['s', ['S']], ['ʃ', ['SH']], ['t', ['T']], ['ɾ', ['T']], ['ʔ', ['T']], ['θ', ['TH']], ['v', ['V']], ['w', ['W']], ['j', ['Y']],
+  ['z', ['Z']], ['ʒ', ['ZH']], ['x', ['K']], ['ç', ['H']]
+];
+function ipaToClasses(tokens){
+  const out = [];
+  for (const raw of tokens){
+    const t = raw.replace(/[ˈˌ0-9.^\[\]:]/g, '');
+    let i = 0;
+    while (i < t.length){
+      const hit = IPA_TABLE.find(([s]) => t.startsWith(s, i));
+      if (hit){ out.push(...hit[1]); i += hit[0].length; } else i++;      // unknown marks are skipped
+    }
+  }
+  return out;
+}
+// pairs that are normal variation (accents, fast speech): cheap to align, never reported
+const SOUND_NEAR = new Set(['T|D', 'D|T', 'Z|S', 'IH|AH', 'AH|IH', 'AH|ER', 'ER|AH', 'A|AH', 'AH|A', 'UH|UW', 'UW|UH', 'AH|UH', 'UH|AH',
+  'IH|IY', 'IY|IH', 'EH|EY', 'EY|EH', 'A|OW', 'OW|A', 'EH|AE', 'AE|EH', 'ER|R', 'R|ER']);
+function subCost(e, h){
+  if (e === h) return 0;
+  if (SOUND_NEAR.has(e + '|' + h)) return 0.5;
+  return VOWELS.has(e) === VOWELS.has(h) ? 1 : 2.5;                    // a vowel is never read as a consonant
+}
+/* global alignment (Needleman–Wunsch). Returns, for each expected index, the heard index it lines up with (or -1 = dropped). */
+function alignSounds(E, H){
+  const n = E.length, m = H.length, W = m + 1;
+  const D = new Float32Array((n + 1) * W), P = new Uint8Array((n + 1) * W);     // 0 diag, 1 up (drop), 2 left (extra sound)
+  for (let i = 1; i <= n; i++){ D[i * W] = i; P[i * W] = 1; }
+  for (let j = 1; j <= m; j++){ D[j] = j * 0.7; P[j] = 2; }
+  for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++){
+    const dg = D[(i - 1) * W + j - 1] + subCost(E[i - 1], H[j - 1]), up = D[(i - 1) * W + j] + 1, lf = D[i * W + j - 1] + 0.7;
+    if (dg <= up && dg <= lf){ D[i * W + j] = dg; P[i * W + j] = 0; } else if (up <= lf){ D[i * W + j] = up; P[i * W + j] = 1; } else { D[i * W + j] = lf; P[i * W + j] = 2; }
+  }
+  const map = new Int32Array(n).fill(-1); let i = n, j = m;
+  while (i > 0 || j > 0){
+    const p = i > 0 && j > 0 ? P[i * W + j] : i > 0 ? 1 : 2;
+    if (p === 0){ map[i - 1] = j - 1; i--; j--; } else if (p === 1) i--; else j--;
+  }
+  return { map, cost: D[n * W + m] };
+}
+let CMU = null;
+function cmuVariants(part){
+  if (!CMU) return [];
+  const out = [], k = part.toLowerCase();
+  for (let v = 1; v <= 4; v++){
+    const s = CMU[v === 1 ? k : `${k}(${v})`]; if (!s) continue;
+    out.push(s.split(' ').map(p => ({ c: ARPA_CLASS[p.replace(/\d/g, '')], stress: /1|2/.test(p) ? 1 : /0/.test(p) ? 0 : -1 })).filter(x => x.c));
+  }
+  return out;
+}
+/* words: tokenize() output; heardTokens: model output. Returns per word: { k, word, issues, exp, got } or null if it can't compare. */
+function compareSounds(words, heardTokens, checkWord){
+  const H = ipaToClasses(heardTokens);
+  const wordsV = words.map(w => {
+    if (!w.parts.length) return null;
+    let combos = [[]];
+    for (const part of w.parts){
+      const vs = cmuVariants(part); if (!vs.length) return null;               // unknown word: not checked
+      combos = combos.flatMap(c => vs.map(v => c.concat(v))).slice(0, 8);
+    }
+    return combos;
+  });
+  const E = [], owner = [];
+  wordsV.forEach((vs, k) => { if (vs) vs[0].forEach(p => { E.push(p); owner.push(k); }); });
+  if (E.length < 3 || H.length < 2) return null;
+  const { map, cost } = alignSounds(E.map(p => p.c), H);
+  if (cost / E.length > 0.75) return null;                                    // a different sentence, or mostly unclear
+  const result = [];
+  wordsV.forEach((vs, k) => {
+    if (!vs || !checkWord(k)) return;
+    const idx = owner.map((o, n) => o === k ? n : -1).filter(n => n >= 0);
+    const hits = idx.map(n => map[n]).filter(j => j >= 0);
+    if (hits.length < idx.length * 0.4){ result.push({ k, word: words[k].raw, unclear: true, issues: [] }); return; }
+    // the heard stretch for this word: from its first to its last matched sound (plus one on each side for safety)
+    const lo = Math.max(0, Math.min(...hits) - 1), hi = Math.min(H.length - 1, Math.max(...hits) + 1);
+    const seg = H.slice(lo, hi + 1);
+    let best = null;
+    for (const v of vs){
+      const a = alignSounds(v.map(p => p.c), seg);
+      if (!best || a.cost < best.a.cost) best = { v, a };
+    }
+    const padL = lo < Math.min(...hits), padR = hi > Math.max(...hits);
+    const nextWord = words.slice(k + 1).find(w => w.parts.length);
+    const lastWord = !nextWord;
+    const nextStartsCons = !!(nextWord && !/^[aeiou]/.test(nextWord.parts[0]));
+    const issues = [];
+    best.v.forEach((p, n) => {
+      let j = best.a.map[n];
+      if ((padL && j === 0) || (padR && j === seg.length - 1)) j = -1;          // a neighbour's sound is not this word's sound
+      const got = j >= 0 ? seg[j] : null;
+      const prev = best.v[n - 1], next = best.v[n + 1], isV = VOWELS.has(p.c);
+      if (got === p.c) return;
+      if (got && SOUND_NEAR.has(p.c + '|' + got)){
+        // near pairs are only reported for the classic learner contrasts in a stressed syllable
+        const key = p.c + '|' + got;
+        if (p.stress === 1 && (key === 'IY|IH' || key === 'IH|IY' || key === 'AE|EH' || key === 'EH|AE') && !(next && next.c === 'R')) issues.push({ t: 'sub', exp: p.c, got });
+        return;
+      }
+      if (got){
+        if (isV && p.stress === 0) return;                                      // unstressed vowels may reduce freely
+        if (isV && next && next.c === 'R') return;                              // vowels before r vary by accent
+        issues.push({ t: 'sub', exp: p.c, got });
+        return;
+      }
+      // dropped sound
+      if (isV){ if (p.stress === 1 && best.v.filter(x => VOWELS.has(x.c)).length > 1) issues.push({ t: 'del', exp: p.c }); return; }
+      if (p.c === 'H') return;
+      if ((p.c === 'N' || p.c === 'M') && prev && VOWELS.has(prev.c) && prev.stress === 0) return;   // "Americans": a weak nasal fades into the vowel
+      const tdCluster = (p.c === 'T' || p.c === 'D') && prev && !VOWELS.has(prev.c) && ((next && !VOWELS.has(next.c)) || (!next && nextStartsCons));
+      if (tdCluster) return;                                                    // "next day", "just because": normal in fast speech
+      if (lastWord && !next && ['P', 'T', 'K', 'B', 'D', 'G'].includes(p.c)) return;   // a final stop at the very end is often unreleased
+      issues.push({ t: 'del', exp: p.c });
+    });
+    const own = Array.from(best.a.map).filter(j => j >= 0 && !((padL && j === 0) || (padR && j === seg.length - 1)));
+    const gotSeg = own.length ? seg.slice(Math.min(...own), Math.max(...own) + 1) : [];
+    result.push({ k, word: words[k].raw, issues: issues.slice(0, 3),
+      exp: best.v.map(p => SOUND_IPA[p.c]).join(' '), got: gotSeg.map(c => SOUND_IPA[c]).join(' ') || '—' });
+  });
+  return result;
+}
+const SOUND_TIPS = {
+  'TH|S': 'θ: put the tip of your tongue lightly between your teeth and blow (not s).',
+  'TH|T': 'θ: tongue between your teeth and blow air; don’t stop the air like t.',
+  'TH|F': 'θ: use your tongue, not your lip: tongue tip between the teeth.',
+  'DH|D': 'ð: tongue tip between your teeth with voice (buzz); don’t tap like d.',
+  'DH|Z': 'ð: tongue tip between your teeth with voice, not behind them like z.',
+  'V|B': 'v: upper teeth on your lower lip and buzz; don’t close both lips like b.',
+  'V|W': 'v: upper teeth touch your lower lip; w uses round lips only.',
+  'V|F': 'v: same mouth as f, but add your voice (buzz).',
+  'W|V': 'w: round your lips; teeth should not touch your lip.',
+  'R|L': 'ɹ: curl the tongue back and don’t let it touch the roof of your mouth (l touches).',
+  'L|R': 'l: touch the ridge behind your top teeth with your tongue tip.',
+  'L|N': 'l: tongue tip up, but let the air flow over the sides (n sends it through the nose).',
+  'N|L': 'n: tongue tip up and let the sound go through your nose.',
+  'N|NG': 'n: tongue tip touches behind the top teeth (ŋ uses the back of the tongue).',
+  'NG|N': 'ŋ: lift the back of your tongue, as at the end of “sing”.',
+  'IY|IH': 'i: a long, tense “ee” with smiling lips (sheep, not ship).',
+  'IH|IY': 'ɪ: short and relaxed (ship, not sheep).',
+  'AE|EH': 'æ: open your mouth wider and spread your lips (bad, not bed).',
+  'EH|AE': 'ɛ: mouth half open, shorter than æ (bed, not bad).',
+  'S|SH': 's: tongue tip near the top teeth, lips spread (see, not she).',
+  'SH|S': 'ʃ: round your lips and pull your tongue back (she, not see).',
+  'Z|S': 'z: like s but with voice (buzz).',
+  'Z|JH': 'z: keep the air flowing; don’t stop it like dʒ.',
+  'JH|Z': 'dʒ: start with the tongue touching, like d, then release (judge).',
+  'CH|SH': 'tʃ: start with a stop like t, then release (chair, not share).',
+  'SH|CH': 'ʃ: let the air flow without stopping it (share, not chair).',
+  'P|F': 'p: close both lips, then pop.', 'F|P': 'f: upper teeth on the lower lip and blow.',
+  'B|V': 'b: close both lips; teeth don’t touch the lip.',
+  'OW|A': 'oʊ: start with o and round your lips toward u (go).',
+  'UW|UH': 'u: long and tightly rounded (food, not foot).', 'UH|UW': 'ʊ: short and relaxed (foot, not food).'
+};
+function soundTip(i){
+  if (i.t === 'del') return VOWELS.has(i.exp) ? `Say the vowel /${SOUND_IPA[i.exp]}/; it was missing.` : `Say the /${SOUND_IPA[i.exp]}/ clearly; it was missing.`;
+  return SOUND_TIPS[i.exp + '|' + i.got] || `Expected /${SOUND_IPA[i.exp]}/, heard /${SOUND_IPA[i.got]}/.`;
+}
+
+/* the phoneme model runs in its own worker, so the page stays responsive while it works */
+const PHONEME_MODEL = 'onnx-community/wav2vec2-lv-60-espeak-cv-ft-ONNX';
+const CMU_URL = 'https://cdn.jsdelivr.net/npm/cmu-pronouncing-dictionary@3.0.0/index.js';
+const PH_WORKER_SRC = `
+import { AutoModelForCTC, AutoProcessor, env } from '${TRANSFORMERS_URL}';
+env.allowLocalModels = false;
+let model = null, proc = null, inv = null;
+const make = device => AutoModelForCTC.from_pretrained('${PHONEME_MODEL}', {
+  device, dtype: device === 'webgpu' ? 'q4' : 'q8', progress_callback: p => postMessage({ type: 'progress', p }) });
+onmessage = async (e) => {
+  const m = e.data;
+  if (m.type === 'load'){
+    let device = (self.navigator && navigator.gpu && await navigator.gpu.requestAdapter().catch(() => null)) ? 'webgpu' : 'wasm';
+    try {
+      try { model = await make(device); } catch (err){ if (device !== 'webgpu') throw err; device = 'wasm'; model = await make(device); }
+      proc = await AutoProcessor.from_pretrained('${PHONEME_MODEL}');
+      const vocab = await fetch('https://huggingface.co/${PHONEME_MODEL}/resolve/main/vocab.json').then(r => r.json());
+      inv = {}; for (const k in vocab) inv[vocab[k]] = k;
+      postMessage({ type: 'ready', device });
+    } catch (err){ postMessage({ type: 'error', error: String(err && err.message || err) }); }
+  } else if (m.type === 'run'){
+    try {
+      const { logits } = await model(await proc(m.audio));
+      const [, n, v] = logits.dims, d = logits.data, out = []; let prev = -1;
+      for (let i = 0; i < n; i++){
+        let b = 0, bv = -Infinity;
+        for (let j = 0; j < v; j++){ const x = Number(d[i * v + j]); if (x > bv){ bv = x; b = j; } }
+        if (b !== prev){ const t = inv[b]; if (t && !/^<.*>$/.test(t)) out.push(t); }      // CTC: collapse repeats, drop blanks
+        prev = b;
+      }
+      postMessage({ type: 'result', id: m.id, tokens: out });
+    } catch (err){ postMessage({ type: 'result', id: m.id, error: String(err && err.message || err) }); }
+  }
+};`;
+function soundStatus(text, kind){
+  const el = $('#soundMsg'); if (!el) return;
+  $('#soundRow').hidden = !text;
+  el.textContent = text || ''; el.classList.toggle('err', kind === 'err'); el.classList.toggle('ok', kind === 'good');
+}
+const Phon = {
+  worker: null, ready: false, device: '', loading: null, pending: new Map(), seq: 0, chain: Promise.resolve(), files: {},
+  ensure(){
+    if (this.ready) return Promise.resolve();
+    if (this.loading) return this.loading;
+    this.loading = new Promise((resolve, reject) => {
+      let w;
+      try { w = new Worker(URL.createObjectURL(new Blob([PH_WORKER_SRC], { type: 'text/javascript' })), { type: 'module' }); }
+      catch (e){ this.loading = null; reject(new Error('This browser cannot run the sound-check model')); return; }
+      this.worker = w;
+      w.onmessage = (e) => {
+        const m = e.data;
+        if (m.type === 'progress'){
+          const p = m.p || {};
+          if (p.file && p.total) this.files[p.file] = { loaded: p.loaded || 0, total: p.total };
+          if (p.file && p.status === 'done' && this.files[p.file]) this.files[p.file].loaded = this.files[p.file].total;
+          const f = Object.values(this.files), tot = f.reduce((a, x) => a + x.total, 0), got = f.reduce((a, x) => a + x.loaded, 0);
+          if (tot > 5e6) soundStatus(`Sound check: getting the open-source phoneme model (one time)… ${Math.min(99, Math.round(got / tot * 100))}% (${Math.round(got / 1e6)} / ${Math.round(tot / 1e6)} MB)`);
+        } else if (m.type === 'ready'){
+          this.ready = true; this.device = m.device; store.set('phonCached', true);
+          soundStatus('Sound check ready · ' + (m.device === 'webgpu' ? 'GPU' : 'CPU (slower)') + ' · runs on this computer. Each check takes about as long as the sentence.', 'good');
+          resolve();
+        } else if (m.type === 'error'){
+          this.loading = null; soundStatus('Sound check model failed to load: ' + m.error, 'err'); reject(new Error(m.error));
+        } else if (m.type === 'result'){
+          const cb = this.pending.get(m.id); this.pending.delete(m.id);
+          if (cb) m.error ? cb.reject(new Error(m.error)) : cb.resolve(m.tokens);
+        }
+      };
+      w.onerror = (e) => { this.loading = null; soundStatus('Sound check model failed to load.', 'err'); reject(new Error(e.message || 'worker error')); };
+      soundStatus('Sound check: preparing the phoneme model…');
+      w.postMessage({ type: 'load' });
+    });
+    return this.loading;
+  },
+  run(audio){
+    const job = this.chain.then(() => new Promise((resolve, reject) => {
+      const id = ++this.seq; this.pending.set(id, { resolve, reject });
+      this.worker.postMessage({ type: 'run', id, audio }, [audio.buffer]);
+    }));
+    this.chain = job.catch(() => {});
+    return job;
+  }
+};
+/* the dictionary is read as data (JSON), never run as code */
+let cmuLoading = null;
+function loadCmu(){
+  if (CMU) return Promise.resolve();
+  return cmuLoading || (cmuLoading = fetch(CMU_URL)
+    .then(r => { if (!r.ok) throw new Error('dictionary HTTP ' + r.status); return r.text(); })
+    .then(t => { const d = JSON.parse(t.slice(t.indexOf('= {') + 2, t.lastIndexOf('}') + 1)); if (!d || typeof d.the !== 'string') throw new Error('dictionary format'); CMU = d; })
+    .catch(e => { cmuLoading = null; throw e; }));
+}
+const soundPending = new Set();
+async function runSoundCheck(sentence){
+  const t = takes.get(sentence), r = S.results[sentence];
+  if (!t || !r) return;
+  const redraw = () => { const i = S.sentences.indexOf(sentence); if (i >= 0) renderSentence(i); };
+  if (t.audio.length > TAKE_SR * 60){ r.sounds = null; r.soundNote = 'Sound check works on up to 60 seconds of speech. Try one sentence at a time.'; redraw(); return; }
+  soundPending.add(sentence); redraw();
+  const id = t.id;
+  try {
+    await Promise.all([Phon.ensure(), loadCmu()]);
+    const tokens = await Phon.run(t.audio.slice());
+    const cur = S.results[sentence], now = takes.get(sentence);
+    if (!cur || !now || now.id !== id) return;                                  // re-recorded meanwhile: the newer check wins
+    const words = tokenize(sentence);
+    const res = compareSounds(words, tokens, k => !words[k].parts.every(p => FUNC_WORDS.has(p)));
+    if (!res){ cur.sounds = null; cur.soundNote = 'Couldn’t line up the sounds with this sentence. Try again a little closer to the mic.'; }
+    else { cur.sounds = res.filter(x => x.issues.length).map(x => ({ k: x.k, word: x.word, issues: x.issues, exp: x.exp, got: x.got })); cur.soundNote = ''; }
+    saveResults();
+  } catch (e){
+    const cur = S.results[sentence]; if (cur) cur.soundNote = 'Sound check didn’t run: ' + e.message;
+  } finally {
+    if (takes.get(sentence) && takes.get(sentence).id === id) soundPending.delete(sentence);
+    redraw(); renderSummary();
+  }
+}
+function renderSoundNotes(res, r, s){
+  const box = document.createElement('div'); box.className = 'sndbox';
+  if (soundPending.has(s)){ box.textContent = 'Sound check: listening to each sound…'; box.classList.add('pending'); }
+  else if (r.soundNote){ box.textContent = r.soundNote; box.classList.add('pending'); }
+  else if (Array.isArray(r.sounds)){
+    if (!r.sounds.length){ box.textContent = '✓ Sound check: no clear problems in the main words.'; box.classList.add('ok'); }
+    else {
+      const head = document.createElement('div'); head.className = 'sndhead'; head.textContent = 'Sound check (beta): possible problems'; box.appendChild(head);
+      r.sounds.forEach(x => {
+        const row = document.createElement('div'); row.className = 'snditem';
+        const w = x.word.replace(/[^A-Za-z0-9'’\-]/g, '');
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'wl-word'; b.textContent = w; b.title = 'Hear it slowly'; b.onclick = () => speak(w, 0.7);
+        const p = document.createElement('span'); p.className = 'sndipa'; p.textContent = `expected /${x.exp.replace(/ /g, '')}/ · heard /${x.got.replace(/ /g, '')}/`;
+        const tip = document.createElement('span'); tip.className = 'sndtip'; tip.textContent = x.issues.map(soundTip).join(' ');
+        row.append(b, p, tip); box.appendChild(row);
+      });
+    }
+  } else return;
+  res.appendChild(box);
+}
+
 /* ---------- persistence ---------- */
 function loadDay(skipPull){
   const saved = store.get('day:' + S.date, null);
@@ -1324,7 +1653,9 @@ function renderSentence(i){
     const span = document.createElement('span');
     span.className = 'w' + (r && w.parts.length ? (r.marks[k] ? ' ok' : (r.partial && r.partial[k]) ? ' part' : ' miss') : '');
     span.textContent = w.raw;
-    span.title = 'Click to hear this word';
+    const snd = r && Array.isArray(r.sounds) && r.sounds.find(x => x.k === k);
+    if (snd){ span.classList.add('snd'); }
+    span.title = snd ? 'Sound check: ' + snd.issues.map(soundTip).join(' ') + ' (click to hear)' : 'Click to hear this word';
     span.onclick = () => speak(w.raw.replace(/[^A-Za-z0-9'’\-]/g,''), 0.7);
     text.appendChild(span); text.appendChild(document.createTextNode(' '));
   });
@@ -1360,6 +1691,7 @@ function renderSentence(i){
       t.setAttribute('aria-expanded', String(S.toneOpen === s));
       res.append(bar);
     }
+    renderSoundNotes(res, r, s);
   }
   syncTone(i);
   li.classList.toggle('active', i === S.active);
@@ -1419,6 +1751,7 @@ const FUNC_WORDS = new Set(('a an the i me my mine you your yours he him his she
   'to of in on at for with by from up as into about over than then and or but so if there here').split(' '));
 function collectMissed(scope){
   const map = new Map(), skipped = new Set();
+  const soundWords = x => ((x && Array.isArray(x.sounds)) ? x.sounds : []).map(o => o.word.replace(/[^A-Za-z0-9'’\-]/g, ''));
   const add = (w, day) => {
     const k = wlKey(w); if (!/[a-z]/.test(k)) return;
     if (k.split(' ').every(x => FUNC_WORDS.has(x))){ skipped.add(k); return; }   // "the", "I", "do not"…
@@ -1426,11 +1759,11 @@ function collectMissed(scope){
     e.count++; if (day > e.last) e.last = day; map.set(k, e);
   };
   if (scope === 'today'){
-    S.sentences.forEach(s => { const r = S.results[s]; if (r) (r.missed || []).forEach(w => add(w, S.date)); });
+    S.sentences.forEach(s => { const r = S.results[s]; if (r) (r.missed || []).concat(soundWords(r)).forEach(w => add(w, S.date)); });
   } else {
     store.keys().filter(k => /^res:\d{4}-\d{2}-\d{2}$/.test(k)).forEach(k => {
       const day = k.slice(4), r = store.get(k, null);
-      Object.values((r && r.results) || {}).forEach(x => ((x && x.missed) || []).forEach(w => add(w, day)));
+      Object.values((r && r.results) || {}).forEach(x => ((x && x.missed) || []).concat(soundWords(x)).forEach(w => add(w, day)));
     });
   }
   const list = [...map.values()].sort((a, b) => b.last.localeCompare(a.last) || b.count - a.count || a.word.localeCompare(b.word));
@@ -1707,6 +2040,22 @@ $('#engineLoad').onclick = () => { $('#engineLoad').hidden = true; Local.ensure(
 updateSrNotice(); engineIdle();
 if (S.engine === 'local' && store.get('localModelCached', false)) Local.ensure().catch(() => {});   // loads from the browser cache
 // Self-test (open the page with #selftest): transcribe a public sample recording on this computer
+if (location.hash === '#soundtest'){
+  (async () => {
+    try {
+      await Promise.all([Phon.ensure(), loadCmu()]);
+      soundStatus('Sound self-test: checking a sample recording…');
+      const buf = await fetch('https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/jfk.wav').then(r => r.arrayBuffer());
+      const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      const audio = (await ctx.decodeAudioData(buf)).getChannelData(0).slice(); ctx.close();
+      const t0 = performance.now(); const tokens = await Phon.run(audio);
+      const words = tokenize('And so my fellow Americans, ask not what your country can do for you; ask what you can do for your country.');
+      const res = compareSounds(words, tokens, k => !words[k].parts.every(p => FUNC_WORDS.has(p)));
+      const flagged = res ? res.filter(x => x.issues.length).map(x => x.word) : null;
+      soundStatus(`Sound self-test OK (${Phon.device}, ${((performance.now() - t0) / 1000).toFixed(1)} s for 11 s): heard “${tokens.join(' ').slice(0, 60)}…” · flagged: ${flagged ? (flagged.join(', ') || 'none') : 'could not compare'}`, 'good');
+    } catch (e){ soundStatus('Sound self-test failed: ' + e.message, 'err'); }
+  })();
+}
 if (location.hash === '#selftest'){
   (async () => {
     try {
@@ -1722,6 +2071,14 @@ if (location.hash === '#selftest'){
 }
 document.querySelectorAll('#wlScope [data-scope]').forEach(b => b.onclick = () => { S.wlScope = b.dataset.scope; store.set('wlScope', S.wlScope); renderWordList(); });
 $('#wlDownload').onclick = downloadWordList;
+$('#soundCheck').checked = S.soundCheck;
+$('#soundCheck').onchange = e => {
+  S.soundCheck = e.target.checked; store.set('soundCheck', S.soundCheck);
+  if (S.soundCheck){ Promise.all([Phon.ensure(), loadCmu()]).catch(err => soundStatus('Sound check couldn’t start: ' + err.message, 'err')); }
+  else soundStatus('');
+  S.sentences.forEach((s, i) => renderSentence(i));
+};
+if (S.soundCheck) Promise.all([Phon.ensure(), loadCmu()]).catch(err => soundStatus('Sound check couldn’t start: ' + err.message, 'err'));
 $('#whole').checked = S.whole;
 $('#whole').onchange = e => { stopAll(); S.whole = e.target.checked; store.set('whole', S.whole); loadDay(true); };
 $('#rate').value = S.rate;$('#rateOut').textContent = S.rate.toFixed(2) + '×';
